@@ -22,7 +22,7 @@ router.post('/register', async (req, res) => {
     return res.status(400).json({ error: 'Username must be 3-30 alphanumeric characters or underscores' });
   }
 
-  const existing = db.prepare('SELECT id FROM users WHERE email = ? OR username = ?').get(email, username);
+  const existing = await db.prepare('SELECT id FROM users WHERE email = $1 OR username = $2').get(email, username);
   if (existing) {
     return res.status(409).json({ error: 'Email or username already in use' });
   }
@@ -30,9 +30,9 @@ router.post('/register', async (req, res) => {
   const id = uuidv4();
   const password_hash = await bcrypt.hash(password, 12);
 
-  db.prepare(`
+  await db.prepare(`
     INSERT INTO users (id, username, email, password_hash, is_verified)
-    VALUES (?, ?, ?, ?, 1)
+    VALUES ($1, $2, $3, $4, 1)
   `).run(id, username, email, password_hash);
 
   res.status(201).json({ message: 'Account created. You can now log in.' });
@@ -46,7 +46,7 @@ router.post('/login', async (req, res) => {
     return res.status(400).json({ error: 'Email and password are required' });
   }
 
-  const user = db.prepare('SELECT * FROM users WHERE email = ?').get(email);
+  const user = await db.prepare('SELECT * FROM users WHERE email = $1').get(email);
   if (!user) {
     return res.status(401).json({ error: 'Invalid credentials' });
   }

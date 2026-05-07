@@ -3,7 +3,9 @@ import express from 'express';
 import cors from 'cors';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { initDb } from './database.js';
+import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
+import { initDb, pool } from './database.js';
 
 import authRoutes from './routes/auth.js';
 import storyRoutes from './routes/stories.js';
@@ -45,6 +47,26 @@ app.use((err, req, res, _next) => {
 
 async function start() {
   await initDb();
+
+  // Create default admin user if it doesn't exist
+  try {
+    const adminExists = await pool.query('SELECT id FROM users WHERE username = $1', ['admin']);
+    if (adminExists.rows.length === 0) {
+      const adminId = uuidv4();
+      const adminPassword = 'Pxd11112002@';
+      const adminEmail = 'ducphamxuan1st@gmail.com';
+      const passwordHash = await bcrypt.hash(adminPassword, 12);
+
+      await pool.query(
+        'INSERT INTO users (id, username, email, password_hash, is_admin, is_verified) VALUES ($1, $2, $3, $4, $5, $6)',
+        [adminId, 'admin', adminEmail, passwordHash, 1, 1]
+      );
+      console.log('✓ Default admin user created: username=admin, password=Pxd11112002@');
+    }
+  } catch (error) {
+    console.error('Error creating default admin:', error);
+  }
+
   app.listen(PORT, () => {
     console.log(`Rebuild World server running on http://localhost:${PORT}`);
   });

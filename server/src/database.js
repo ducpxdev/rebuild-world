@@ -126,17 +126,36 @@ export async function initDb() {
 const dbProxy = {
   prepare(sql) {
     return {
-      run(...params) {
-        return pool.query(sql, params);
+      async run(...params) {
+        try {
+          const result = await pool.query(sql, params);
+          return result;
+        } catch (error) {
+          console.error('Database error:', error);
+          throw error;
+        }
       },
-      get(...params) {
-        return pool.query(sql, params).then(result => result.rows[0] || undefined);
+      async get(...params) {
+        try {
+          const result = await pool.query(sql, params);
+          return result.rows[0] || undefined;
+        } catch (error) {
+          console.error('Database error:', error);
+          throw error;
+        }
       },
-      all(...params) {
-        return pool.query(sql, params).then(result => result.rows);
+      async all(...params) {
+        try {
+          const result = await pool.query(sql, params);
+          return result.rows;
+        } catch (error) {
+          console.error('Database error:', error);
+          throw error;
+        }
       },
     };
   },
 };
 
 export default dbProxy;
+export { pool };
