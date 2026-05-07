@@ -5,6 +5,7 @@
   "scripts": {
     "build": "cd client && npm install && npm run build",
     "start": "npm install --prefix server && node server/src/index.js",
-    "postinstall": "npm run build"
+    "postinstall": "npm run build",
+    "create-admin": "node server/create-admin.js"
   }
 }
