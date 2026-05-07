@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Sitemap: https://rebuild-world.up.railway.app/sitemap.xml
