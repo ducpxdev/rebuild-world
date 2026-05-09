@@ -9,7 +9,7 @@ const router = Router();
 const upload = multer({ dest: path.join(process.cwd(), 'server', 'uploads') });
 
 // GET volumes for a story
-router.get('/stories/:storyId/volumes', async (req, res) => {
+router.get('/:storyId/volumes', async (req, res) => {
   try {
     const { storyId } = req.params;
     
@@ -26,7 +26,7 @@ router.get('/stories/:storyId/volumes', async (req, res) => {
 });
 
 // GET single volume with its chapters
-router.get('/stories/:storyId/volumes/:volumeId', async (req, res) => {
+router.get('/:storyId/volumes/:volumeId', async (req, res) => {
   try {
     const { storyId, volumeId } = req.params;
     
@@ -54,7 +54,7 @@ router.get('/stories/:storyId/volumes/:volumeId', async (req, res) => {
 });
 
 // POST create volume
-router.post('/stories/:storyId/volumes', authenticateToken, upload.single('cover'), async (req, res) => {
+router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), async (req, res) => {
   try {
     const { storyId } = req.params;
     const { title, description, volume_number } = req.body;
@@ -85,7 +85,7 @@ router.post('/stories/:storyId/volumes', authenticateToken, upload.single('cover
 });
 
 // PUT update volume
-router.put('/stories/:storyId/volumes/:volumeId', authenticateToken, upload.single('cover'), async (req, res) => {
+router.put('/:storyId/volumes/:volumeId', authenticateToken, upload.single('cover'), async (req, res) => {
   try {
     const { storyId, volumeId } = req.params;
     const { title, description } = req.body;
@@ -118,7 +118,7 @@ router.put('/stories/:storyId/volumes/:volumeId', authenticateToken, upload.sing
 });
 
 // DELETE volume
-router.delete('/stories/:storyId/volumes/:volumeId', authenticateToken, async (req, res) => {
+router.delete('/:storyId/volumes/:volumeId', authenticateToken, async (req, res) => {
   try {
     const { storyId, volumeId } = req.params;
 

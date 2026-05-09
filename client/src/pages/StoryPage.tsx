@@ -116,22 +116,28 @@ export default function StoryPage() {
     setVolumeLoading(true);
     setVolumeError('');
     try {
-      await api.post(`/stories/${id}/volumes`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      await api.post(`/stories/${id}/volumes`, formData);
       setVolumeForm({ title: '', description: '' });
       setVolumeCover(null);
       setShowVolumeForm(false);
       setVolumeSuccess(true);
       // Refresh volumes
       const res = await api.get(`/stories/${id}/volumes`);
-      setVolumes(res.data.volumes || []);
+      const newVolumes = res.data.volumes || [];
+      setVolumes(newVolumes);
+      
+      // Auto-expand newly created volume (last one in the list)
+      if (newVolumes.length > 0) {
+        const newVolumeId = newVolumes[newVolumes.length - 1].id;
+        setExpandedVolumes(new Set([newVolumeId]));
+      }
+      
       // Clear success message after 2 seconds
       setTimeout(() => setVolumeSuccess(false), 2000);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Failed to create volume';
+      console.error('Volume creation error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to create volume';
       setVolumeError(errorMsg);
-      console.error('Failed to create volume:', error);
     } finally {
       setVolumeLoading(false);
     }

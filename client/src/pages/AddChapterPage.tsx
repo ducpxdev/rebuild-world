@@ -1,7 +1,13 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Upload, X, Image, FileText } from 'lucide-react';
+
+interface Volume {
+  id: string;
+  volume_number: number;
+  title: string;
+}
 
 export default function AddChapterPage() {
   const { id } = useParams<{ id: string }>();
@@ -11,13 +17,25 @@ export default function AddChapterPage() {
   const [images, setImages] = useState<File[]>([]);
   const [previews, setPreviews] = useState<string[]>([]);
   const [storyType, setStoryType] = useState<'text' | 'comic' | null>(null);
+  const [volumes, setVolumes] = useState<Volume[]>([]);
+  const [selectedVolumeId, setSelectedVolumeId] = useState<string>('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Fetch story type on mount
-  useState(() => {
-    api.get(`/stories/${id}`).then(r => setStoryType(r.data.type));
-  });
+  // Fetch story type and volumes on mount
+  useEffect(() => {
+    Promise.all([
+      api.get(`/stories/${id}`).then(r => setStoryType(r.data.type)),
+      api.get(`/stories/${id}/volumes`).then(r => {
+        const vols = r.data.volumes || [];
+        setVolumes(vols);
+        // Select first volume by default
+        if (vols.length > 0) {
+          setSelectedVolumeId(vols[0].id);
+        }
+      }).catch(() => setVolumes([]))
+    ]);
+  }, [id]);
 
   const handleImages = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -37,6 +55,7 @@ export default function AddChapterPage() {
 
     const formData = new FormData();
     if (title) formData.append('title', title);
+    if (selectedVolumeId) formData.append('volume_id', selectedVolumeId);
     if (storyType === 'text') {
       formData.append('content', content);
     } else {
@@ -44,7 +63,7 @@ export default function AddChapterPage() {
     }
 
     try {
-      await api.post(`/stories/${id}/chapters`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post(`/stories/${id}/chapters`, formData);
       navigate(`/story/${id}`);
     } catch (err) {
       const error = err as { response?: { data?: { error: string } } };
@@ -66,6 +85,20 @@ export default function AddChapterPage() {
           <input type="text" value={title} onChange={e => setTitle(e.target.value)}
             className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="e.g. The Beginning" />
         </div>
+
+        {volumes.length > 0 && (
+          <div>
+            <label className="block text-sm font-medium text-slate-400 mb-1">Volume</label>
+            <select value={selectedVolumeId} onChange={e => setSelectedVolumeId(e.target.value)}
+              className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300">
+              {volumes.map(vol => (
+                <option key={vol.id} value={vol.id}>
+                  Volume {vol.volume_number}: {vol.title || `Volume ${vol.volume_number}`}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         {storyType === 'text' ? (
           <div>
