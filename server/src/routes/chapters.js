@@ -164,7 +164,7 @@ router.post('/', authenticateToken, upload.any(), async (req, res) => {
 });
 
 // PUT /api/stories/:storyId/chapters/:number — admin only
-router.put('/:number', authenticateToken, requireAdmin, upload.array('images', 50), async (req, res) => {
+router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req, res) => {
   try {
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
@@ -175,13 +175,43 @@ router.put('/:number', authenticateToken, requireAdmin, upload.array('images', 5
     const chapter = chapterResult.rows[0];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
-    const { title, content } = req.body;
-    const images = req.files?.length
-      ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
+    let { title, content } = req.body;
+    
+    // Ensure title and content are strings
+    title = title ?? chapter.title;
+    content = content ?? chapter.content;
+    if (content) content = (content || '').trim();
+
+    // Handle comic images (main content) - fieldname: 'images'
+    const comicImages = req.files
+      ?.filter(f => f.fieldname === 'images')
+      .map(f => `/uploads/${f.filename}`);
+    const images = comicImages?.length 
+      ? JSON.stringify(comicImages)
       : chapter.images;
 
+    // Handle text chapter embedded images - fieldname: 'text_images'
+    let finalContent = content;
+    const textImages = req.files?.filter(f => f.fieldname === 'text_images');
+    if (textImages && textImages.length > 0 && story.type === 'text') {
+      console.log('[Chapter Update] Processing', textImages.length, 'text images');
+      // Create a map of image URLs
+      const imageUrls = textImages.map(f => `/uploads/${f.filename}`);
+      
+      // Replace markdown image placeholders with actual URLs
+      let imageIndex = 0;
+      finalContent = finalContent.replace(/!\[image-\d+\]\([^)]*\)/g, () => {
+        if (imageIndex < imageUrls.length) {
+          return `![image-${imageIndex + 1}](${imageUrls[imageIndex++]})`;
+        }
+        return '';
+      });
+      
+      console.log('[Chapter Update] Replaced image URLs in content');
+    }
+
     await pool.query('UPDATE chapters SET title = $1, content = $2, images = $3 WHERE id = $4',
-      [title ?? chapter.title, content ?? chapter.content, images, chapter.id]);
+      [title || chapter.title, finalContent || chapter.content, images, chapter.id]);
 
     res.json({ message: 'Chapter updated' });
   } catch (error) {

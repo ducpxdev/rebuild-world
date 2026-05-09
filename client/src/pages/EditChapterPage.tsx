@@ -12,6 +12,8 @@ export default function EditChapterPage() {
   const [existingImages, setExistingImages] = useState<string[]>([]);
   const [newImages, setNewImages] = useState<File[]>([]);
   const [newPreviews, setNewPreviews] = useState<string[]>([]);
+  const [textImages, setTextImages] = useState<File[]>([]);
+  const [textImagePreviews, setTextImagePreviews] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -45,6 +47,17 @@ export default function EditChapterPage() {
     setNewPreviews(prev => prev.filter((_, i) => i !== idx));
   };
 
+  const handleTextImages = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setTextImages(prev => [...prev, ...files]);
+    setTextImagePreviews(prev => [...prev, ...files.map(f => URL.createObjectURL(f))]);
+  };
+
+  const removeTextImage = (idx: number) => {
+    setTextImages(prev => prev.filter((_, i) => i !== idx));
+    setTextImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -54,6 +67,8 @@ export default function EditChapterPage() {
     formData.append('title', title);
     if (storyType === 'text') {
       formData.append('content', content);
+      // For text chapters, upload any embedded images
+      textImages.forEach(f => formData.append('text_images', f));
     } else if (newImages.length > 0) {
       newImages.forEach(f => formData.append('images', f));
     }
@@ -102,13 +117,64 @@ export default function EditChapterPage() {
         </div>
 
         {storyType === 'text' ? (
-          <div>
-            <label className="flex items-center gap-2 text-sm font-medium text-slate-400 mb-1">
-              <FileText className="w-4 h-4" /> Chapter Content
-            </label>
-            <textarea value={content} onChange={e => setContent(e.target.value)} rows={25}
-              className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none resize-none font-mono text-sm leading-relaxed text-slate-300 placeholder-slate-600"
-              placeholder="Chapter content..." />
+          <div className="space-y-6">
+            <div>
+              <label className="flex items-center gap-2 text-sm font-medium text-slate-400 mb-1">
+                <FileText className="w-4 h-4" /> Chapter Content
+              </label>
+              <textarea value={content} onChange={e => setContent(e.target.value)} rows={20}
+                className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none resize-none font-mono text-sm leading-relaxed text-slate-300 placeholder-slate-600"
+                placeholder="Chapter content... You can insert images below." />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-slate-400 mb-2">Insert Images into Content</label>
+              <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
+                <Image className="w-6 h-6 text-slate-600 mb-1" />
+                <span className="text-sm text-slate-500">Click to add images</span>
+                <span className="text-xs text-slate-600 mt-1">Images will be inserted into your content</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={handleTextImages}
+                  className="hidden"
+                />
+              </label>
+
+              {textImagePreviews.length > 0 && (
+                <div className="mt-3 space-y-2">
+                  <p className="text-xs text-slate-400">Click an image to insert it into your content:</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    {textImagePreviews.map((src, i) => (
+                      <div key={i} className="relative group">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const imageName = `image-${i + 1}`;
+                            const markdownImage = `![${imageName}](${src})\n`;
+                            setContent(prev => prev + markdownImage);
+                          }}
+                          className="w-full text-left"
+                        >
+                          <img src={src} alt={`Image ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border border-slate-700 hover:border-cyan-500 transition group-hover:opacity-75" />
+                          <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition rounded-lg">
+                            Click to insert
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeTextImage(i)}
+                          className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         ) : (
           <div>
