@@ -65,9 +65,28 @@ router.get('/:id', optionalAuth, async (req, res) => {
       SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
         (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count,
         (SELECT COUNT(*) FROM bookmarks b WHERE b.story_id = s.id) as bookmark_count,
-        (SELECT COUNT(*) FROM comments cm JOIN chapters ch ON cm.chapter_id = ch.id WHERE ch.story_id = s.id) as comment_count
-      FROM stories s JOIN users u ON s.author_id = u.id
+        (
+          SELECT COUNT(*) FROM comments cm 
+          JOIN chapters ch ON cm.chapter_id = ch.id 
+          WHERE ch.story_id = s.id
+        ) + (
+          SELECT COUNT(*) FROM story_comments sc 
+          WHERE sc.story_id = s.id
+        ) as comment_count,
+        COALESCE(
+          SUM(
+            CASE 
+              WHEN c.content IS NOT NULL AND c.content != '' 
+              THEN array_length(string_to_array(c.content, ' '), 1)
+              ELSE 0
+            END
+          ), 0
+        ) as total_word_count
+      FROM stories s 
+      LEFT JOIN users u ON s.author_id = u.id
+      LEFT JOIN chapters c ON c.story_id = s.id
       WHERE s.id = $1
+      GROUP BY s.id, u.id
     `, [req.params.id]);
     const story = storyResult.rows[0];
 

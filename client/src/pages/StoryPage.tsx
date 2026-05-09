@@ -13,6 +13,7 @@ interface StoryDetail {
   bookmark_count: number; comment_count: number; bookmarked: boolean;
   author_name: string; author_avatar?: string; author_id: string;
   chapter_count: number; chapters: Chapter[]; created_at: number; updated_at: number;
+  total_word_count?: number;
 }
 
 function StarRating({ rating, onRate, interactive = false, size = 'md' }: { rating: number; onRate?: (r: number) => void; interactive?: boolean; size?: 'sm' | 'md' }) {
@@ -493,6 +494,15 @@ export default function StoryPage() {
               </div>
               <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Comments</span>
             </div>
+            {story.total_word_count !== undefined && (
+              <div className="flex flex-col items-center py-4 gap-1">
+                <div className="flex items-center gap-1.5">
+                  <BookOpen className="w-4 h-4 text-blue-400" />
+                  <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{(story.total_word_count || 0).toLocaleString()}</span>
+                </div>
+                <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Words</span>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -576,6 +586,16 @@ export default function StoryPage() {
                   <div className="flex justify-between">
                     <dt className="text-slate-500">Updated</dt>
                     <dd className="text-slate-300 font-medium">{timeSince(story.updated_at)}</dd>
+                  </div>
+                )}
+                <div className="flex justify-between border-t border-slate-700/50 pt-3 mt-3">
+                  <dt className="text-slate-500">Comments</dt>
+                  <dd className="text-emerald-400 font-medium">{story.comment_count}</dd>
+                </div>
+                {story.total_word_count !== undefined && (
+                  <div className="flex justify-between">
+                    <dt className="text-slate-500">Total Words</dt>
+                    <dd className="text-blue-400 font-medium">{(story.total_word_count || 0).toLocaleString()}</dd>
                   </div>
                 )}
               </dl>
