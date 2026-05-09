@@ -9,6 +9,10 @@ passport.use(new GoogleStrategy.Strategy({
   callbackURL: process.env.GOOGLE_CALLBACK_URL || 'http://localhost:3001/api/auth/google/callback'
 }, async (accessToken, refreshToken, profile, done) => {
   try {
+    if (!profile.id || !profile.emails?.[0]?.value) {
+      return done(new Error('Invalid Google profile data'));
+    }
+
     // Check if user exists by google_id
     let result = await pool.query('SELECT * FROM users WHERE google_id = $1', [profile.id]);
     let user = result.rows[0];
@@ -61,6 +65,7 @@ passport.use(new GoogleStrategy.Strategy({
 
     done(null, user);
   } catch (error) {
+    console.error('OAuth strategy error:', error.message);
     done(error);
   }
 }));
@@ -72,8 +77,13 @@ passport.serializeUser((user, done) => {
 passport.deserializeUser(async (id, done) => {
   try {
     const result = await pool.query('SELECT * FROM users WHERE id = $1', [id]);
-    done(null, result.rows[0]);
+    const user = result.rows[0];
+    if (!user) {
+      return done(new Error('User not found'));
+    }
+    done(null, user);
   } catch (error) {
+    console.error('Deserialize user error:', error.message);
     done(error);
   }
 });

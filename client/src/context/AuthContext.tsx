@@ -45,7 +45,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (token) {
       api.get('/auth/me')
-        .then((res) => setUser(res.data))
+        .then((res) => {
+          // Ensure is_admin is a boolean
+          const userData = { ...res.data, is_admin: !!res.data.is_admin };
+          setUser(userData);
+        })
         .catch(() => {
           localStorage.removeItem('token');
           setToken(null);
@@ -60,7 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const res = await api.post('/auth/login', { email, password });
     localStorage.setItem('token', res.data.token);
     setToken(res.data.token);
-    setUser(res.data.user);
+    // Ensure is_admin is a boolean
+    const userData = { ...res.data.user, is_admin: !!res.data.user.is_admin };
+    setUser(userData);
   };
 
   const register = async (username: string, email: string, password: string) => {

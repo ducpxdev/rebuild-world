@@ -22,17 +22,10 @@ export async function requireAdmin(req, res, next) {
   if (!req.user) {
     return res.status(401).json({ error: 'Access token required' });
   }
-  try {
-    const result = await pool.query('SELECT is_admin FROM users WHERE id = $1', [req.user.id]);
-    const user = result.rows[0];
-    if (!user || !user.is_admin) {
-      return res.status(403).json({ error: 'Admin access required' });
-    }
-    next();
-  } catch (error) {
-    console.error('Admin check error:', error);
-    res.status(500).json({ error: 'Authorization check failed' });
+  if (!req.user.is_admin) {
+    return res.status(403).json({ error: 'Admin access required' });
   }
+  next();
 }
 
 export function optionalAuth(req, res, next) {

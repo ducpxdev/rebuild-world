@@ -24,9 +24,16 @@ const databaseUrl = getDatabaseUrl();
 const pool = new Pool({
   connectionString: databaseUrl,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: Number(process.env.PG_POOL_MAX || 10),
+  max: Number(process.env.PG_POOL_MAX || 20),
+  min: Number(process.env.PG_POOL_MIN || 2),
   connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10000),
   idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 30000),
+  statement_timeout: Number(process.env.PG_STATEMENT_TIMEOUT_MS || 30000),
+});
+
+// Handle pool errors
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client', err);
 });
 
 export async function getDatabaseInfo() {
