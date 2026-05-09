@@ -97,17 +97,25 @@ router.post('/', authenticateToken, uploadDb.any(), saveUploadedFiles, async (re
       // Create a map of database-backed image URLs
       const imageUrls = textImages.map(f => f.url);
       
-      // Replace markdown image placeholders with actual URLs
-      // The frontend inserts ![image-N](blob:...) syntax, we replace it with real URLs
+      // Replace markdown image placeholders with actual database-backed URLs
+      // The frontend inserts ![image-N](blob:...) syntax, we replace it with /api/images/{id} URLs
       let imageIndex = 0;
-      finalContent = finalContent.replace(/!\[image-\d+\]\([^)]*\)/g, () => {
+      finalContent = finalContent.replace(/!\[image-\d+]\([^)]*\)/g, () => {
         if (imageIndex < imageUrls.length) {
           return `![image-${imageIndex + 1}](${imageUrls[imageIndex++]})`;
         }
         return '';
       });
       
-      console.log('[Chapter Create] Replaced image URLs in content');
+      // Strip any remaining external/non-database URLs from content
+      // Only allow /api/images/ URLs for security and consistency
+      finalContent = finalContent.replace(/!\[([^\]]*)]\((?!\/)([^)]+)\)/g, ''); // Remove external URLs
+      
+      console.log('[Chapter Create] Replaced image URLs in content, stripped external URLs');
+    } else if (story.type === 'text' && content) {
+      // Even without new uploads, strip any external URLs from content for security
+      finalContent = content.replace(/!\[([^\]]*)]\((?!\/)([^)]+)\)/g, '');
+      console.log('[Chapter Create] Stripped external URLs from content');
     }
 
     // Validation - title is always required
@@ -161,7 +169,7 @@ router.post('/', authenticateToken, uploadDb.any(), saveUploadedFiles, async (re
 });
 
 // PUT /api/stories/:storyId/chapters/:number — admin only
-router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req, res) => {
+router.put('/:number', authenticateToken, requireAdmin, uploadDb.any(), saveUploadedFiles, async (req, res) => {
   try {
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
@@ -201,16 +209,23 @@ router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req
       // Create a map of database-backed image URLs
       const imageUrls = textImages.map(f => f.url);
       
-      // Replace markdown image placeholders with actual URLs
+      // Replace markdown image placeholders with actual database-backed URLs
       let imageIndex = 0;
-      finalContent = finalContent.replace(/!\[image-\d+\]\([^)]*\)/g, () => {
+      finalContent = finalContent.replace(/!\[image-\d+]\([^)]*\)/g, () => {
         if (imageIndex < imageUrls.length) {
           return `![image-${imageIndex + 1}](${imageUrls[imageIndex++]})`;
         }
         return '';
       });
       
-      console.log('[Chapter Update] Replaced image URLs in content');
+      // Strip any remaining external/non-database URLs from content
+      finalContent = finalContent.replace(/!\[([^\]]*)]\((?!\/)([^)]+)\)/g, '');
+      
+      console.log('[Chapter Update] Replaced image URLs in content, stripped external URLs');
+    } else if (story.type === 'text' && content) {
+      // Even without new uploads, strip any external URLs from content for security
+      finalContent = content.replace(/!\[([^\]]*)]\((?!\/)([^)]+)\)/g, '');
+      console.log('[Chapter Update] Stripped external URLs from content');
     }
 
     await pool.query('UPDATE chapters SET title = $1, content = $2, images = $3 WHERE id = $4',

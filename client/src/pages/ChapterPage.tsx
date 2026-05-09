@@ -11,12 +11,14 @@ interface ChapterData {
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
   prev: number | null; next: number | null; comments: Comment[];
 }
-
 // Parse markdown content and render with embedded images
+// IMPORTANT: Only renders database-backed images from /api/images/ endpoint
+// External URLs are automatically stripped during processing
 const renderMarkdownContent = (content: string): ReactNode => {
-  // Split content by markdown image syntax: ![alt](url)
+  // Split content by markdown image syntax: ![alt](/api/images/id)
+  // Only database-backed URLs are rendered for security and consistency
   const parts: (string | ReactNode)[] = [];
-  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  const imageRegex = /!\[([^\]]*)\]\(\/api\/images\/([^)]+)\)/g;
   let lastIndex = 0;
   let match;
 
@@ -33,8 +35,9 @@ const renderMarkdownContent = (content: string): ReactNode => {
       }
     }
 
-    // Add image
-    const [, alt, src] = match;
+    // Add image - only from /api/images/ database backend
+    const [, alt, imageId] = match;
+    const src = `/api/images/${imageId}`;
     parts.push(
       <div key={`img-${match.index}`} className="my-4">
         <img
@@ -42,6 +45,10 @@ const renderMarkdownContent = (content: string): ReactNode => {
           alt={alt || 'Chapter image'}
           className="w-full max-w-2xl mx-auto rounded-lg border border-slate-700 shadow-lg"
           loading="lazy"
+          onError={(e) => {
+            console.warn('Failed to load image:', src);
+            (e.target as HTMLImageElement).style.display = 'none';
+          }}
         />
         {alt && <p className="text-center text-sm text-slate-500 mt-2 italic">{alt}</p>}
       </div>
@@ -62,7 +69,7 @@ const renderMarkdownContent = (content: string): ReactNode => {
     }
   }
 
-  // If no images found, just return the content as is
+  // If no database-backed images found, just return the content as is
   if (parts.length === 0) {
     return <p className="whitespace-pre-wrap">{content}</p>;
   }
