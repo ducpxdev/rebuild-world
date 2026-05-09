@@ -58,20 +58,26 @@ export default function StoryPage() {
   const [volumeCover, setVolumeCover] = useState<File | null>(null);
 
   useEffect(() => {
-    Promise.all([
-      api.get(`/stories/${id}`),
-      api.get(`/stories/${id}/volumes`)
-    ]).then(([storyRes, volumesRes]) => {
-      setStory(storyRes.data);
-      setUserRating(storyRes.data.user_rating || 0);
-      setBookmarked(storyRes.data.bookmarked || false);
-      setBookmarkCount(storyRes.data.bookmark_count || 0);
-      setVolumes(volumesRes.data.volumes || []);
-      // Expand first volume by default
-      if (volumesRes.data.volumes?.length > 0) {
-        setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
+    const loadStory = async () => {
+      try {
+        const [storyRes, volumesRes] = await Promise.all([
+          api.get(`/stories/${id}`),
+          api.get(`/stories/${id}/volumes`).catch(() => ({ data: { volumes: [] } }))
+        ]);
+        setStory(storyRes.data);
+        setUserRating(storyRes.data.user_rating || 0);
+        setBookmarked(storyRes.data.bookmarked || false);
+        setBookmarkCount(storyRes.data.bookmark_count || 0);
+        setVolumes(volumesRes.data.volumes || []);
+        // Expand first volume by default
+        if (volumesRes.data.volumes?.length > 0) {
+          setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
+        }
+      } catch (error) {
+        console.error('Error loading story:', error);
       }
-    });
+    };
+    loadStory();
   }, [id]);
 
   const handleRate = async (rating: number) => {
