@@ -2,11 +2,9 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import multer from 'multer';
-import path from 'path';
+import { upload } from '../middleware/upload.js';
 
 const router = Router();
-const upload = multer({ dest: path.join(process.cwd(), 'server', 'uploads') });
 
 // GET volumes for a story
 router.get('/:storyId/volumes', async (req, res) => {
@@ -59,7 +57,8 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
     const { storyId } = req.params;
     const { title, description, volume_number } = req.body;
 
-    console.log('[Volume Create] File uploaded:', req.file?.filename);
+    console.log('[Volume Create] User:', req.user.id, 'Story:', storyId);
+    console.log('[Volume Create] File object:', req.file ? { fieldname: req.file.fieldname, filename: req.file.filename, path: req.file.path, size: req.file.size } : 'NO FILE');
     console.log('[Volume Create] Volume data:', { title, description, volume_number });
 
     // Verify user owns the story
@@ -71,7 +70,7 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
     const volumeId = uuidv4();
     const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
     
-    console.log('[Volume Create] Cover URL:', cover_url);
+    console.log('[Volume Create] Generated cover_url:', cover_url);
 
     await pool.query(
       `INSERT INTO volumes (id, story_id, volume_number, title, description, cover_url) 
@@ -79,10 +78,11 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
       [volumeId, storyId, volume_number, title, description, cover_url]
     );
 
-    console.log('[Volume Create] Volume created:', volumeId, 'with cover:', cover_url);
+    console.log('[Volume Create] ✓ Success - Volume:', volumeId, 'Cover URL:', cover_url);
     res.status(201).json({ id: volumeId, cover_url, message: 'Volume created successfully' });
   } catch (error) {
-    console.error('Error creating volume:', error);
+    console.error('[Volume Create] ✗ Error:', error.message);
+    console.error('[Volume Create] Error details:', error);
     if (error.code === '23505') {
       return res.status(409).json({ error: 'Volume number already exists for this story' });
     }
