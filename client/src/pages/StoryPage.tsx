@@ -613,7 +613,7 @@ export default function StoryPage() {
                 const volChapters = story.chapters.filter(ch => ch.volume_id === vol.id);
                 return (
                   <div key={vol.id}>
-                    {/* Volume header */}
+                    {/* Volume header - cover image and title */}
                     <button
                       onClick={() => {
                         const newExpanded = new Set(expandedVolumes);
@@ -624,27 +624,17 @@ export default function StoryPage() {
                         }
                         setExpandedVolumes(newExpanded);
                       }}
-                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
+                      className="w-full flex items-center gap-4 px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
                     >
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
-                        {vol.cover_url && (
-                          <img src={vol.cover_url} alt="" className="w-12 h-16 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
-                        )}
-                        <div className="min-w-0">
-                          <span className="font-bold text-slate-300 group-hover:text-cyan-400 transition block">
-                            Volume {vol.volume_number}: {vol.title || `Volume ${vol.volume_number}`}
-                          </span>
-                          {vol.description && (
-                            <span className="text-sm text-slate-500 truncate block">{vol.description}</span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 text-slate-500 shrink-0 ml-4">
-                        <span className="text-xs">{volChapters.length} chapters</span>
-                        {expandedVolumes.has(vol.id) ? (
-                          <ChevronUp className="w-4 h-4" />
-                        ) : (
-                          <ChevronDown className="w-4 h-4" />
+                      {vol.cover_url && (
+                        <img src={vol.cover_url} alt="" className="w-16 h-24 rounded-lg object-cover border border-slate-700/50 shrink-0" />
+                      )}
+                      <div className="min-w-0 flex-1">
+                        <span className="text-lg font-bold text-slate-300 group-hover:text-cyan-400 transition block">
+                          {vol.title || `Volume ${vol.volume_number}`}
+                        </span>
+                        {vol.description && (
+                          <span className="text-sm text-slate-500 line-clamp-2 block mt-1">{vol.description}</span>
                         )}
                       </div>
                     </button>
