@@ -42,12 +42,17 @@ router.get('/:number', optionalAuth, async (req, res) => {
   }
 });
 
-// POST /api/stories/:storyId/chapters — admin only
-router.post('/', authenticateToken, requireAdmin, upload.array('images', 50), async (req, res) => {
+// POST /api/stories/:storyId/chapters — author or admin
+router.post('/', authenticateToken, upload.array('images', 50), async (req, res) => {
   try {
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
     if (!story) return res.status(404).json({ error: 'Story not found' });
+
+    // Check if user is author or admin
+    if (story.author_id !== req.user.id && !req.user.is_admin) {
+      return res.status(403).json({ error: 'Only the story author or admin can create chapters' });
+    }
 
     const { title, content, volume_id } = req.body;
 
