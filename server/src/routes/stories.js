@@ -89,7 +89,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
     }
 
     const chaptersResult = await pool.query(`
-      SELECT id, chapter_number, title, views, created_at FROM chapters
+      SELECT id, chapter_number, title, views, created_at, volume_id FROM chapters
       WHERE story_id = $1 ORDER BY chapter_number ASC
     `, [story.id]);
     const chapters = chaptersResult.rows;
