@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
@@ -44,6 +44,7 @@ function timeSince(ts: number) {
 export default function StoryPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
@@ -248,6 +249,36 @@ export default function StoryPage() {
       ...prev,
       [volumeId]: prev[volumeId].filter((_, i) => i !== idx)
     }));
+  };
+
+  const insertTextAtCursor = (volumeId: string, text: string) => {
+    const textarea = textareaRefs.current[volumeId];
+    if (!textarea) {
+      // Fallback: append to end if textarea not found
+      setChapterForms(prev => ({
+        ...prev,
+        [volumeId]: { ...prev[volumeId], content: prev[volumeId].content + text }
+      }));
+      return;
+    }
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const currentContent = chapterForms[volumeId]?.content || '';
+    const before = currentContent.substring(0, start);
+    const after = currentContent.substring(end);
+    const newContent = before + text + after;
+    
+    setChapterForms(prev => ({
+      ...prev,
+      [volumeId]: { ...prev[volumeId], content: newContent }
+    }));
+    
+    // Restore focus and set cursor after inserted text
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + text.length, start + text.length);
+    }, 0);
   };
 
   const createChapter = async (volumeId: string, e: React.FormEvent) => {
@@ -932,6 +963,7 @@ export default function StoryPage() {
                                       <div>
                                         <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
                                         <textarea
+                                          ref={(el) => { if (el) textareaRefs.current[vol.id] = el; }}
                                           value={chapterForms[vol.id]?.content || ''}
                                           onChange={(e) => setChapterForms(prev => ({
                                             ...prev,
@@ -972,13 +1004,7 @@ export default function StoryPage() {
                                                       // Insert markdown image syntax into content at cursor position
                                                       const imageName = `image-${i + 1}`;
                                                       const markdownImage = `![${imageName}](${src})\n`;
-                                                      setChapterForms(prev => ({
-                                                        ...prev,
-                                                        [vol.id]: {
-                                                          ...prev[vol.id],
-                                                          content: prev[vol.id].content + markdownImage
-                                                        }
-                                                      }));
+                                                      insertTextAtCursor(vol.id, markdownImage);
                                                     }}
                                                     className="w-full text-left"
                                                   >

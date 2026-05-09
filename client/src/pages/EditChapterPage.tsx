@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { Upload, X, Image, FileText, Trash2 } from 'lucide-react';
@@ -6,6 +6,7 @@ import { Upload, X, Image, FileText, Trash2 } from 'lucide-react';
 export default function EditChapterPage() {
   const { id, number } = useParams<{ id: string; number: string }>();
   const navigate = useNavigate();
+  const contentRef = useRef<HTMLTextAreaElement>(null);
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [storyType, setStoryType] = useState<'text' | 'comic' | null>(null);
@@ -56,6 +57,25 @@ export default function EditChapterPage() {
   const removeTextImage = (idx: number) => {
     setTextImages(prev => prev.filter((_, i) => i !== idx));
     setTextImagePreviews(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const insertTextAtCursor = (text: string) => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const before = content.substring(0, start);
+    const after = content.substring(end);
+    const newContent = before + text + after;
+    
+    setContent(newContent);
+    
+    // Restore focus and set cursor after inserted text
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + text.length, start + text.length);
+    }, 0);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,7 +142,11 @@ export default function EditChapterPage() {
               <label className="flex items-center gap-2 text-sm font-medium text-slate-400 mb-1">
                 <FileText className="w-4 h-4" /> Chapter Content
               </label>
-              <textarea value={content} onChange={e => setContent(e.target.value)} rows={20}
+              <textarea 
+                ref={contentRef}
+                value={content} 
+                onChange={e => setContent(e.target.value)} 
+                rows={20}
                 className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none resize-none font-mono text-sm leading-relaxed text-slate-300 placeholder-slate-600"
                 placeholder="Chapter content... You can insert images below." />
             </div>
@@ -153,7 +177,7 @@ export default function EditChapterPage() {
                           onClick={() => {
                             const imageName = `image-${i + 1}`;
                             const markdownImage = `![${imageName}](${src})\n`;
-                            setContent(prev => prev + markdownImage);
+                            insertTextAtCursor(markdownImage);
                           }}
                           className="w-full text-left"
                         >
