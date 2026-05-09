@@ -5,9 +5,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
-import session from 'express-session';
 import { getDatabaseInfo, initDb, pool } from './database.js';
-import passport from './oauth.js';
 
 import authRoutes from './routes/auth.js';
 import storyRoutes from './routes/stories.js';
@@ -23,19 +21,6 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'your-secret-key-change-in-production',
-  resave: false,
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    maxAge: 24 * 60 * 60 * 1000 // 24 hours
-  }
-}));
-app.use(passport.initialize());
-app.use(passport.session());
 app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 app.use('/api/auth', authRoutes);

@@ -5,7 +5,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../mailer.js';
 import { authenticateToken } from '../middleware/auth.js';
-import passport from 'passport';
 
 const router = Router();
 
@@ -211,34 +210,8 @@ router.get('/me', authenticateToken, async (req, res) => {
   }
 });
 
-// Google OAuth routes
-router.get('/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
-router.get('/google/callback', passport.authenticate('google', { failureRedirect: '/login' }), (req, res) => {
-  // Generate JWT token for authenticated user
-  const token = jwt.sign(
-    { id: req.user.id, username: req.user.username, email: req.user.email, is_admin: !!req.user.is_admin },
-    process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
-  );
-
-  // Redirect to frontend with token
-  const redirectUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  res.redirect(`${redirectUrl}?token=${token}&user=${encodeURIComponent(JSON.stringify({
-    id: req.user.id,
-    username: req.user.username,
-    email: req.user.email,
-    avatar_url: req.user.avatar_url,
-    bio: req.user.bio,
-    is_admin: !!req.user.is_admin
-  }))}`);
-});
-
 router.get('/logout', (req, res) => {
-  req.logout((err) => {
-    if (err) return res.status(500).json({ error: 'Logout failed' });
-    res.json({ message: 'Logged out successfully' });
-  });
+  res.json({ message: 'Logged out successfully' });
 });
 
 export default router;

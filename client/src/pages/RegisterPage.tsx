@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Crosshair, Mail, Lock, User, AlertCircle, CheckCircle } from 'lucide-react';
 
@@ -10,26 +10,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const { register, updateUser } = useAuth();
-  const [searchParams] = useSearchParams();
-
-  // Handle Google OAuth callback
-  useEffect(() => {
-    const token = searchParams.get('token');
-    const userStr = searchParams.get('user');
-    
-    if (token && userStr) {
-      try {
-        const user = JSON.parse(decodeURIComponent(userStr));
-        localStorage.setItem('token', token);
-        updateUser(user);
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setSuccess(`Welcome ${user.username}! Your account has been created.`);
-      } catch (err) {
-        console.error('Failed to parse Google auth response:', err);
-      }
-    }
-  }, [searchParams, updateUser]);
+  const { register } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
