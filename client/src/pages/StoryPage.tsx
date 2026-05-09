@@ -49,6 +49,7 @@ export default function StoryPage() {
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
+  const [expandedChapterLists, setExpandedChapterLists] = useState<Set<string>>(new Set());
   const [expandedChapterForms, setExpandedChapterForms] = useState<Set<string>>(new Set());
   const [userRating, setUserRating] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
@@ -881,7 +882,7 @@ export default function StoryPage() {
                           <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
                         ) : (
                           <>
-                            {volChapters.slice(0, 5).map(ch => {
+                            {volChapters.slice(0, expandedChapterLists.has(vol.id) ? volChapters.length : 5).map(ch => {
                               // Check if chapter is new (created within last 7 days)
                               const isNew = (Date.now() / 1000 - ch.created_at) < 7 * 24 * 3600;
                               return (
@@ -911,12 +912,19 @@ export default function StoryPage() {
                             {volChapters.length > 5 && (
                               <button
                                 onClick={() => {
-                                  // For now, just expand to show all chapters
-                                  // This is a placeholder for future pagination implementation
+                                  const newExpanded = new Set(expandedChapterLists);
+                                  if (newExpanded.has(vol.id)) {
+                                    newExpanded.delete(vol.id);
+                                  } else {
+                                    newExpanded.add(vol.id);
+                                  }
+                                  setExpandedChapterLists(newExpanded);
                                 }}
                                 className="w-full px-6 py-3 text-center text-cyan-400 hover:bg-cyan-500/5 transition text-sm font-medium border-t border-slate-800/20"
                               >
-                                Xem tiếp ({volChapters.length - 5} chương)
+                                {expandedChapterLists.has(vol.id) 
+                                  ? 'Ẩn các chương' 
+                                  : `Xem tiếp (${volChapters.length - 5} chương)`}
                               </button>
                             )}
                           </>
