@@ -62,7 +62,17 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
       return res.status(403).json({ error: 'Only the story author or admin can create chapters' });
     }
 
-    const { title, content, volume_id } = req.body;
+    let { title, content, volume_id } = req.body;
+    
+    // Ensure title is a string (trim whitespace)
+    title = (title || '').trim();
+    
+    // Ensure content is a string if provided
+    if (content) {
+      content = (content || '').trim();
+    }
+
+    console.log('[Chapter Create] Parsed body:', { title, content: content?.substring(0, 30), volume_id });
 
     const lastResult = await pool.query('SELECT MAX(chapter_number) as max FROM chapters WHERE story_id = $1', [story.id]);
     const chapter_number = (lastResult.rows[0]?.max ?? 0) + 1;
@@ -71,13 +81,27 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
       ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
       : null;
 
-    if (story.type === 'text' && !content) {
-      console.log('[Chapter Create] Text chapter without content');
-      return res.status(400).json({ error: 'Content is required for text chapters' });
+    // Validation
+    if (story.type === 'text') {
+      if (!title && !content) {
+        console.log('[Chapter Create] Text chapter without title or content');
+        return res.status(400).json({ error: 'Title and content are required' });
+      }
+      if (!content) {
+        console.log('[Chapter Create] Text chapter without content');
+        return res.status(400).json({ error: 'Content is required for text chapters' });
+      }
     }
-    if (story.type === 'comic' && !images) {
-      console.log('[Chapter Create] Comic chapter without images');
-      return res.status(400).json({ error: 'At least one image is required for comic chapters' });
+    
+    if (story.type === 'comic') {
+      if (!title && !images) {
+        console.log('[Chapter Create] Comic chapter without title or images');
+        return res.status(400).json({ error: 'Title and images are required' });
+      }
+      if (!images) {
+        console.log('[Chapter Create] Comic chapter without images');
+        return res.status(400).json({ error: 'At least one image is required for comic chapters' });
+      }
     }
 
     const id = uuidv4();
@@ -93,8 +117,20 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
     console.log('[Chapter Create] Success:', id);
     res.status(201).json({ id, chapter_number, message: 'Chapter created' });
   } catch (error) {
-    console.error('[Chapter Create] Error:', error.message, error.detail || '');
-    res.status(500).json({ error: 'Failed to create chapter' });
+    console.error('[Chapter Create] Database/Error:', error.code, error.message, error.detail || '');
+    console.error('[Chapter Create] Full error:', error);
+    
+    // Return more specific error messages
+    if (error.code === '23503') {
+      // Foreign key violation
+      return res.status(400).json({ error: 'Invalid story or volume reference' });
+    }
+    if (error.code === '23505') {
+      // Unique constraint violation  
+      return res.status(400).json({ error: 'This chapter already exists' });
+    }
+    
+    res.status(500).json({ error: error.message || 'Failed to create chapter' });
   }
 });
 
