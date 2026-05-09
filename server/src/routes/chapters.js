@@ -1,121 +1,158 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../database.js';
+import { pool } from '../database.js';
 import { authenticateToken, optionalAuth, requireAdmin } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
 
 const router = Router({ mergeParams: true });
 
 // GET /api/stories/:storyId/chapters/:number
-router.get('/:number', optionalAuth, (req, res) => {
-  const chapter = db.prepare(`
-    SELECT ch.*, s.type, s.author_id, s.title as story_title
-    FROM chapters ch JOIN stories s ON ch.story_id = s.id
-    WHERE ch.story_id = ? AND ch.chapter_number = ?
-  `).get(req.params.storyId, Number(req.params.number));
+router.get('/:number', optionalAuth, async (req, res) => {
+  try {
+    const chapterResult = await pool.query(`
+      SELECT ch.*, s.type, s.author_id, s.title as story_title
+      FROM chapters ch JOIN stories s ON ch.story_id = s.id
+      WHERE ch.story_id = $1 AND ch.chapter_number = $2
+    `, [req.params.storyId, Number(req.params.number)]);
+    const chapter = chapterResult.rows[0];
 
-  if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
-  db.prepare('UPDATE chapters SET views = views + 1 WHERE id = ?').run(chapter.id);
+    await pool.query('UPDATE chapters SET views = views + 1 WHERE id = $1', [chapter.id]);
 
-  const prev = db.prepare('SELECT chapter_number FROM chapters WHERE story_id = ? AND chapter_number < ? ORDER BY chapter_number DESC LIMIT 1')
-    .get(req.params.storyId, chapter.chapter_number);
-  const next = db.prepare('SELECT chapter_number FROM chapters WHERE story_id = ? AND chapter_number > ? ORDER BY chapter_number ASC LIMIT 1')
-    .get(req.params.storyId, chapter.chapter_number);
+    const prevResult = await pool.query('SELECT chapter_number FROM chapters WHERE story_id = $1 AND chapter_number < $2 ORDER BY chapter_number DESC LIMIT 1',
+      [req.params.storyId, chapter.chapter_number]);
+    const prev = prevResult.rows[0];
+    
+    const nextResult = await pool.query('SELECT chapter_number FROM chapters WHERE story_id = $1 AND chapter_number > $2 ORDER BY chapter_number ASC LIMIT 1',
+      [req.params.storyId, chapter.chapter_number]);
+    const next = nextResult.rows[0];
 
-  const comments = db.prepare(`
-    SELECT c.*, u.username, u.avatar_url FROM comments c
-    JOIN users u ON c.user_id = u.id
-    WHERE c.chapter_id = ? ORDER BY c.created_at ASC
-  `).all(chapter.id);
+    const commentsResult = await pool.query(`
+      SELECT c.*, u.username, u.avatar_url FROM comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.chapter_id = $1 ORDER BY c.created_at ASC
+    `, [chapter.id]);
+    const comments = commentsResult.rows;
 
-  res.json({ ...chapter, prev: prev?.chapter_number ?? null, next: next?.chapter_number ?? null, comments });
+    res.json({ ...chapter, prev: prev?.chapter_number ?? null, next: next?.chapter_number ?? null, comments });
+  } catch (error) {
+    console.error('Error fetching chapter:', error);
+    res.status(500).json({ error: 'Failed to fetch chapter' });
+  }
 });
 
 // POST /api/stories/:storyId/chapters — admin only
-router.post('/', authenticateToken, requireAdmin, upload.array('images', 50), (req, res) => {
-  const story = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.storyId);
-  if (!story) return res.status(404).json({ error: 'Story not found' });
+router.post('/', authenticateToken, requireAdmin, upload.array('images', 50), async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
 
-  const { title, content } = req.body;
+    const { title, content } = req.body;
 
-  const last = db.prepare('SELECT MAX(chapter_number) as max FROM chapters WHERE story_id = ?').get(story.id);
-  const chapter_number = (last?.max ?? 0) + 1;
+    const lastResult = await pool.query('SELECT MAX(chapter_number) as max FROM chapters WHERE story_id = $1', [story.id]);
+    const chapter_number = (lastResult.rows[0]?.max ?? 0) + 1;
 
-  const images = req.files?.length
-    ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
-    : null;
+    const images = req.files?.length
+      ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
+      : null;
 
-  if (story.type === 'text' && !content) {
-    return res.status(400).json({ error: 'Content is required for text chapters' });
+    if (story.type === 'text' && !content) {
+      return res.status(400).json({ error: 'Content is required for text chapters' });
+    }
+    if (story.type === 'comic' && !images) {
+      return res.status(400).json({ error: 'At least one image is required for comic chapters' });
+    }
+
+    const id = uuidv4();
+    await pool.query(`
+      INSERT INTO chapters (id, story_id, chapter_number, title, content, images)
+      VALUES ($1, $2, $3, $4, $5, $6)
+    `, [id, story.id, chapter_number, title || `Chapter ${chapter_number}`, content || null, images]);
+
+    await pool.query("UPDATE stories SET updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $1", [story.id]);
+
+    res.status(201).json({ id, chapter_number, message: 'Chapter created' });
+  } catch (error) {
+    console.error('Error creating chapter:', error);
+    res.status(500).json({ error: 'Failed to create chapter' });
   }
-  if (story.type === 'comic' && !images) {
-    return res.status(400).json({ error: 'At least one image is required for comic chapters' });
-  }
-
-  const id = uuidv4();
-  db.prepare(`
-    INSERT INTO chapters (id, story_id, chapter_number, title, content, images)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `).run(id, story.id, chapter_number, title || `Chapter ${chapter_number}`, content || null, images);
-
-  db.prepare("UPDATE stories SET updated_at = strftime('%s','now') WHERE id = ?").run(story.id);
-
-  res.status(201).json({ id, chapter_number, message: 'Chapter created' });
 });
 
 // PUT /api/stories/:storyId/chapters/:number — admin only
-router.put('/:number', authenticateToken, requireAdmin, upload.array('images', 50), (req, res) => {
-  const story = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.storyId);
-  if (!story) return res.status(403).json({ error: 'Forbidden' });
+router.put('/:number', authenticateToken, requireAdmin, upload.array('images', 50), async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(403).json({ error: 'Forbidden' });
 
-  const chapter = db.prepare('SELECT * FROM chapters WHERE story_id = ? AND chapter_number = ?')
-    .get(story.id, Number(req.params.number));
-  if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+    const chapterResult = await pool.query('SELECT * FROM chapters WHERE story_id = $1 AND chapter_number = $2',
+      [story.id, Number(req.params.number)]);
+    const chapter = chapterResult.rows[0];
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
-  const { title, content } = req.body;
-  const images = req.files?.length
-    ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
-    : chapter.images;
+    const { title, content } = req.body;
+    const images = req.files?.length
+      ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
+      : chapter.images;
 
-  db.prepare('UPDATE chapters SET title = ?, content = ?, images = ? WHERE id = ?')
-    .run(title ?? chapter.title, content ?? chapter.content, images, chapter.id);
+    await pool.query('UPDATE chapters SET title = $1, content = $2, images = $3 WHERE id = $4',
+      [title ?? chapter.title, content ?? chapter.content, images, chapter.id]);
 
-  res.json({ message: 'Chapter updated' });
+    res.json({ message: 'Chapter updated' });
+  } catch (error) {
+    console.error('Error updating chapter:', error);
+    res.status(500).json({ error: 'Failed to update chapter' });
+  }
 });
 
 // DELETE /api/stories/:storyId/chapters/:number — admin only
-router.delete('/:number', authenticateToken, requireAdmin, (req, res) => {
-  const story = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.storyId);
-  if (!story) return res.status(403).json({ error: 'Forbidden' });
+router.delete('/:number', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(403).json({ error: 'Forbidden' });
 
-  const chapter = db.prepare('SELECT * FROM chapters WHERE story_id = ? AND chapter_number = ?')
-    .get(story.id, Number(req.params.number));
-  if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+    const chapterResult = await pool.query('SELECT * FROM chapters WHERE story_id = $1 AND chapter_number = $2',
+      [story.id, Number(req.params.number)]);
+    const chapter = chapterResult.rows[0];
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
-  db.prepare('DELETE FROM chapters WHERE id = ?').run(chapter.id);
-  res.json({ message: 'Chapter deleted' });
+    await pool.query('DELETE FROM chapters WHERE id = $1', [chapter.id]);
+    res.json({ message: 'Chapter deleted' });
+  } catch (error) {
+    console.error('Error deleting chapter:', error);
+    res.status(500).json({ error: 'Failed to delete chapter' });
+  }
 });
 
 // POST /api/stories/:storyId/chapters/:number/comments
-router.post('/:number/comments', authenticateToken, (req, res) => {
-  const { content } = req.body;
-  if (!content?.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
+router.post('/:number/comments', authenticateToken, async (req, res) => {
+  try {
+    const { content } = req.body;
+    if (!content?.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
 
-  const chapter = db.prepare('SELECT id FROM chapters WHERE story_id = ? AND chapter_number = ?')
-    .get(req.params.storyId, Number(req.params.number));
-  if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
+    const chapterResult = await pool.query('SELECT id FROM chapters WHERE story_id = $1 AND chapter_number = $2',
+      [req.params.storyId, Number(req.params.number)]);
+    const chapter = chapterResult.rows[0];
+    if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
-  const id = uuidv4();
-  db.prepare('INSERT INTO comments (id, chapter_id, user_id, content) VALUES (?, ?, ?, ?)')
-    .run(id, chapter.id, req.user.id, content.trim());
+    const id = uuidv4();
+    await pool.query('INSERT INTO comments (id, chapter_id, user_id, content) VALUES ($1, $2, $3, $4)',
+      [id, chapter.id, req.user.id, content.trim()]);
 
-  const comment = db.prepare(`
-    SELECT c.*, u.username, u.avatar_url FROM comments c
-    JOIN users u ON c.user_id = u.id WHERE c.id = ?
-  `).get(id);
+    const commentResult = await pool.query(`
+      SELECT c.*, u.username, u.avatar_url FROM comments c
+      JOIN users u ON c.user_id = u.id WHERE c.id = $1
+    `, [id]);
+    const comment = commentResult.rows[0];
 
-  res.status(201).json(comment);
+    res.status(201).json(comment);
+  } catch (error) {
+    console.error('Error creating comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  }
 });
 
 export default router;

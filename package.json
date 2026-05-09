@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "build": "cd client && npm install && npm run build",
-    "start": "npm install --prefix server && node server/src/index.js",
+    "build-all": "npm install --prefix client && npm run build --prefix client && npm install --prefix server",
+    "start": "node server/src/index.js",
+    "dev": "concurrently \"npm run dev --prefix client\" \"npm run dev --prefix server\"",
     "postinstall": "npm run build",
     "create-admin": "node server/create-admin.js"
   }

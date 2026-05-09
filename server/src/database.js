@@ -1,11 +1,45 @@
 import pkg from 'pg';
 const { Pool } = pkg;
-import { v4 as uuidv4 } from 'uuid';
+
+function getDatabaseUrl() {
+  const candidates = [
+    process.env.DATABASE_URL,
+    process.env.DATABASE_PRIVATE_URL,
+    process.env.DATABASE_PUBLIC_URL,
+    process.env.POSTGRES_URL,
+    process.env.POSTGRESQL_URL,
+  ].filter(Boolean);
+
+  if (candidates.length === 0) {
+    throw new Error(
+      'Missing Postgres connection string. Set DATABASE_URL (or DATABASE_PRIVATE_URL on Railway).'
+    );
+  }
+
+  return candidates[0];
+}
+
+const databaseUrl = getDatabaseUrl();
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: Number(process.env.PG_POOL_MAX || 10),
+  connectionTimeoutMillis: Number(process.env.PG_CONNECT_TIMEOUT_MS || 10000),
+  idleTimeoutMillis: Number(process.env.PG_IDLE_TIMEOUT_MS || 30000),
 });
+
+export async function getDatabaseInfo() {
+  const result = await pool.query(`
+    SELECT
+      current_database() AS database_name,
+      current_user AS database_user,
+      inet_server_addr()::text AS server_addr,
+      inet_server_port() AS server_port
+  `);
+
+  return result.rows[0];
+}
 
 export async function initDb() {
   try {
@@ -15,11 +49,13 @@ export async function initDb() {
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         email TEXT UNIQUE NOT NULL,
-        password_hash TEXT NOT NULL,
+        password_hash TEXT,
+        google_id TEXT UNIQUE,
+        provider TEXT DEFAULT 'local' CHECK(provider IN ('local', 'google')),
         avatar_url TEXT,
         bio TEXT,
         is_admin INTEGER DEFAULT 0,
-        is_verified INTEGER DEFAULT 0,
+        is_verified INTEGER DEFAULT 1,
         verification_token TEXT,
         verification_expires BIGINT,
         reset_token TEXT,

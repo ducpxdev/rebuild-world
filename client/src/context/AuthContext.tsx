@@ -24,7 +24,22 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(localStorage.getItem('token'));
+  const [token, setToken] = useState<string | null>(() => {
+    // Check for token in localStorage or URL params (from Google OAuth callback)
+    const stored = localStorage.getItem('token');
+    if (stored) return stored;
+
+    // Check URL params (from OAuth redirect)
+    const params = new URLSearchParams(window.location.search);
+    const urlToken = params.get('token');
+    if (urlToken) {
+      localStorage.setItem('token', urlToken);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+      return urlToken;
+    }
+    return null;
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

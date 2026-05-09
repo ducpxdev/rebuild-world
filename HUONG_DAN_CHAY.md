@@ -67,7 +67,7 @@ Tạo file mới tên là `.env` và thêm nội dung:
 ```
 PORT=5000
 NODE_ENV=development
-DB_PATH=./database.db
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/rebuild_world
 JWT_SECRET=your-secret-key-12345
 CLIENT_URL=http://localhost:5173
 

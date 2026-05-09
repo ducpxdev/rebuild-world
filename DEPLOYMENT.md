@@ -37,6 +37,7 @@ git push -u origin main
 6. **Add Environment Variables** (in Render dashboard):
    ```
    PORT=3000
+   DATABASE_URL=<persistent_postgres_connection_url>
    JWT_SECRET=your_super_secret_jwt_key_change_in_production
    JWT_EXPIRES_IN=7d
    EMAIL_HOST=smtp.gmail.com
@@ -52,6 +53,7 @@ git push -u origin main
 
 ### Environment Variables Needed
 
+- `DATABASE_URL`: Persistent Postgres connection string (required)
 - `JWT_SECRET`: Change from the default value in production
 - `EMAIL_HOST`, `EMAIL_PORT`, `EMAIL_USER`, `EMAIL_PASS`: Gmail or other SMTP
   - For Gmail: Use an [App Password](https://support.google.com/accounts/answer/185833)
@@ -75,9 +77,9 @@ Visit `http://localhost:3001`
 
 ### Project Structure
 
-- **Server:** Node.js/Express with SQLite database
+- **Server:** Node.js/Express with PostgreSQL database
 - **Client:** React + TypeScript + Vite with Tailwind CSS
-- **Database:** sql.js (in-memory with file persistence)
+- **Database:** PostgreSQL (persistent across redeploys)
 - **File Uploads:** Chapter cover images stored in `server/uploads/`
 
 ### Features

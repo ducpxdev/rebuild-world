@@ -1,26 +1,28 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
-import db from '../database.js';
+import { pool } from '../database.js';
 import { authenticateToken, optionalAuth, requireAdmin } from '../middleware/auth.js';
 import { upload } from '../middleware/upload.js';
 
 const router = Router();
 
 // GET /api/stories — browse/search
-router.get('/', optionalAuth, (req, res) => {
+router.get('/', optionalAuth, async (req, res) => {
   const { q, genre, type, sort = 'latest', page = 1 } = req.query;
   const limit = 20;
   const offset = (Number(page) - 1) * limit;
 
   let where = ['s.is_published = 1'];
   const params = [];
+  let paramIndex = 1;
 
   if (q) {
-    where.push('(s.title LIKE ? OR s.description LIKE ?)');
+    where.push(`(s.title ILIKE $${paramIndex} OR s.description ILIKE $${paramIndex + 1})`);
     params.push(`%${q}%`, `%${q}%`);
+    paramIndex += 2;
   }
-  if (genre) { where.push('s.genre = ?'); params.push(genre); }
-  if (type) { where.push('s.type = ?'); params.push(type); }
+  if (genre) { where.push(`s.genre = $${paramIndex}`); params.push(genre); paramIndex++; }
+  if (type) { where.push(`s.type = $${paramIndex}`); params.push(type); paramIndex++; }
 
   const orderMap = {
     latest: 's.updated_at DESC',
@@ -32,160 +34,207 @@ router.get('/', optionalAuth, (req, res) => {
 
   const whereClause = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
-  const stories = db.prepare(`
-    SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
-      (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count
-    FROM stories s
-    JOIN users u ON s.author_id = u.id
-    ${whereClause}
-    ORDER BY ${order}
-    LIMIT ? OFFSET ?
-  `).all(...params, limit, offset);
+  try {
+    const storiesResult = await pool.query(`
+      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
+        (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count
+      FROM stories s
+      JOIN users u ON s.author_id = u.id
+      ${whereClause}
+      ORDER BY ${order}
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `, [...params, limit, offset]);
+    const stories = storiesResult.rows;
 
-  const total = db.prepare(`
-    SELECT COUNT(*) as count FROM stories s ${whereClause}
-  `).get(...params);
+    const totalResult = await pool.query(`
+      SELECT COUNT(*) as count FROM stories s ${whereClause}
+    `, params);
+    const total = totalResult.rows[0].count;
 
-  res.json({ stories, total: total.count, page: Number(page), pages: Math.ceil(total.count / limit) });
+    res.json({ stories, total, page: Number(page), pages: Math.ceil(total / limit) });
+  } catch (error) {
+    console.error('Error browsing stories:', error);
+    res.status(500).json({ error: 'Failed to browse stories' });
+  }
 });
 
 // GET /api/stories/:id
-router.get('/:id', optionalAuth, (req, res) => {
-  const story = db.prepare(`
-    SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
-      (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count,
-      (SELECT COUNT(*) FROM bookmarks b WHERE b.story_id = s.id) as bookmark_count,
-      (SELECT COUNT(*) FROM comments cm JOIN chapters ch ON cm.chapter_id = ch.id WHERE ch.story_id = s.id) as comment_count
-    FROM stories s JOIN users u ON s.author_id = u.id
-    WHERE s.id = ?
-  `).get(req.params.id);
+router.get('/:id', optionalAuth, async (req, res) => {
+  try {
+    const storyResult = await pool.query(`
+      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
+        (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count,
+        (SELECT COUNT(*) FROM bookmarks b WHERE b.story_id = s.id) as bookmark_count,
+        (SELECT COUNT(*) FROM comments cm JOIN chapters ch ON cm.chapter_id = ch.id WHERE ch.story_id = s.id) as comment_count
+      FROM stories s JOIN users u ON s.author_id = u.id
+      WHERE s.id = $1
+    `, [req.params.id]);
+    const story = storyResult.rows[0];
 
-  if (!story) return res.status(404).json({ error: 'Story not found' });
+    if (!story) return res.status(404).json({ error: 'Story not found' });
 
-  // Increment views
-  db.prepare('UPDATE stories SET views = views + 1 WHERE id = ?').run(story.id);
+    // Increment views
+    await pool.query('UPDATE stories SET views = views + 1 WHERE id = $1', [story.id]);
 
-  let user_rating = 0;
-  let bookmarked = false;
-  if (req.user) {
-    const r = db.prepare('SELECT rating FROM story_ratings WHERE user_id = ? AND story_id = ?')
-      .get(req.user.id, story.id);
-    if (r) user_rating = r.rating;
-    const bm = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND story_id = ?')
-      .get(req.user.id, story.id);
-    if (bm) bookmarked = true;
+    let user_rating = 0;
+    let bookmarked = false;
+    if (req.user) {
+      const rResult = await pool.query('SELECT rating FROM story_ratings WHERE user_id = $1 AND story_id = $2',
+        [req.user.id, story.id]);
+      if (rResult.rows.length > 0) user_rating = rResult.rows[0].rating;
+      
+      const bmResult = await pool.query('SELECT id FROM bookmarks WHERE user_id = $1 AND story_id = $2',
+        [req.user.id, story.id]);
+      if (bmResult.rows.length > 0) bookmarked = true;
+    }
+
+    const chaptersResult = await pool.query(`
+      SELECT id, chapter_number, title, views, created_at FROM chapters
+      WHERE story_id = $1 ORDER BY chapter_number ASC
+    `, [story.id]);
+    const chapters = chaptersResult.rows;
+
+    res.json({ ...story, user_rating, bookmarked, chapters });
+  } catch (error) {
+    console.error('Error fetching story:', error);
+    res.status(500).json({ error: 'Failed to fetch story' });
   }
-
-  const chapters = db.prepare(`
-    SELECT id, chapter_number, title, views, created_at FROM chapters
-    WHERE story_id = ? ORDER BY chapter_number ASC
-  `).all(story.id);
-
-  res.json({ ...story, user_rating, bookmarked, chapters });
 });
 
 // POST /api/stories — admin only
-router.post('/', authenticateToken, requireAdmin, upload.single('cover'), (req, res) => {
-  const { title, description, type, genre, tags, status } = req.body;
-  if (!title || !type) return res.status(400).json({ error: 'Title and type are required' });
-  if (!['text', 'comic'].includes(type)) return res.status(400).json({ error: 'Type must be text or comic' });
+router.post('/', authenticateToken, requireAdmin, upload.single('cover'), async (req, res) => {
+  try {
+    const { title, description, type, genre, tags, status } = req.body;
+    if (!title || !type) return res.status(400).json({ error: 'Title and type are required' });
+    if (!['text', 'comic'].includes(type)) return res.status(400).json({ error: 'Type must be text or comic' });
 
-  const id = uuidv4();
-  const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
+    const id = uuidv4();
+    const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
 
-  db.prepare(`
-    INSERT INTO stories (id, author_id, title, description, cover_url, type, genre, tags, status)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, req.user.id, title, description || null, cover_url, type, genre || null, tags || null, status || 'ongoing');
+    await pool.query(`
+      INSERT INTO stories (id, author_id, title, description, cover_url, type, genre, tags, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+    `, [id, req.user.id, title, description || null, cover_url, type, genre || null, tags || null, status || 'ongoing']);
 
-  // Notify followers
-  const followers = db.prepare('SELECT follower_id FROM followers WHERE followed_id = ?').all(req.user.id);
-  for (const f of followers) {
-    db.prepare('INSERT INTO notifications (id, user_id, type, title, message, link) VALUES (?, ?, ?, ?, ?, ?)')
-      .run(uuidv4(), f.follower_id, 'new_story', `New story: ${title}`, `${req.user.username} published a new story!`, `/story/${id}`);
+    // Notify followers
+    const followersResult = await pool.query('SELECT follower_id FROM followers WHERE followed_id = $1', [req.user.id]);
+    for (const f of followersResult.rows) {
+      await pool.query('INSERT INTO notifications (id, user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5, $6)',
+        [uuidv4(), f.follower_id, 'new_story', `New story: ${title}`, `${req.user.username} published a new story!`, `/story/${id}`]);
+    }
+
+    res.status(201).json({ id, message: 'Story created' });
+  } catch (error) {
+    console.error('Error creating story:', error);
+    res.status(500).json({ error: 'Failed to create story' });
   }
-
-  res.status(201).json({ id, message: 'Story created' });
 });
 
 // PUT /api/stories/:id — admin only
-router.put('/:id', authenticateToken, requireAdmin, upload.single('cover'), (req, res) => {
-  const story = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.id);
-  if (!story) return res.status(404).json({ error: 'Story not found' });
+router.put('/:id', authenticateToken, requireAdmin, upload.single('cover'), async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.id]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
 
-  const { title, description, genre, tags, status, is_published } = req.body;
-  const cover_url = req.file ? `/uploads/${req.file.filename}` : story.cover_url;
+    const { title, description, genre, tags, status, is_published } = req.body;
+    const cover_url = req.file ? `/uploads/${req.file.filename}` : story.cover_url;
 
-  db.prepare(`
-    UPDATE stories SET title = ?, description = ?, cover_url = ?, genre = ?, tags = ?,
-    status = ?, is_published = ?, updated_at = strftime('%s','now') WHERE id = ?
-  `).run(
-    title ?? story.title,
-    description ?? story.description,
-    cover_url,
-    genre ?? story.genre,
-    tags ?? story.tags,
-    status ?? story.status,
-    is_published !== undefined ? Number(is_published) : story.is_published,
-    story.id
-  );
+    await pool.query(`
+      UPDATE stories SET title = $1, description = $2, cover_url = $3, genre = $4, tags = $5,
+      status = $6, is_published = $7, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $8
+    `, [
+      title ?? story.title,
+      description ?? story.description,
+      cover_url,
+      genre ?? story.genre,
+      tags ?? story.tags,
+      status ?? story.status,
+      is_published !== undefined ? Number(is_published) : story.is_published,
+      story.id
+    ]);
 
-  res.json({ message: 'Story updated' });
+    res.json({ message: 'Story updated' });
+  } catch (error) {
+    console.error('Error updating story:', error);
+    res.status(500).json({ error: 'Failed to update story' });
+  }
 });
 
 // DELETE /api/stories/:id — admin only
-router.delete('/:id', authenticateToken, requireAdmin, (req, res) => {
-  const story = db.prepare('SELECT * FROM stories WHERE id = ?').get(req.params.id);
-  if (!story) return res.status(404).json({ error: 'Story not found' });
+router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.id]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
 
-  db.prepare('DELETE FROM stories WHERE id = ?').run(story.id);
-  res.json({ message: 'Story deleted' });
+    await pool.query('DELETE FROM stories WHERE id = $1', [story.id]);
+    res.json({ message: 'Story deleted' });
+  } catch (error) {
+    console.error('Error deleting story:', error);
+    res.status(500).json({ error: 'Failed to delete story' });
+  }
 });
 
 // POST /api/stories/:id/rate — any authenticated user
-router.post('/:id/rate', authenticateToken, (req, res) => {
-  const { rating } = req.body;
-  if (!rating || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
-    return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
+router.post('/:id/rate', authenticateToken, async (req, res) => {
+  try {
+    const { rating } = req.body;
+    if (!rating || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
+      return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
+    }
+
+    const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [req.params.id]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+
+    const existingResult = await pool.query('SELECT rating FROM story_ratings WHERE user_id = $1 AND story_id = $2',
+      [req.user.id, story.id]);
+    const existing = existingResult.rows[0];
+
+    if (existing) {
+      await pool.query('UPDATE story_ratings SET rating = $1 WHERE user_id = $2 AND story_id = $3',
+        [rating, req.user.id, story.id]);
+    } else {
+      await pool.query('INSERT INTO story_ratings (user_id, story_id, rating) VALUES ($1, $2, $3)',
+        [req.user.id, story.id, rating]);
+    }
+
+    // Recalculate average
+    const statsResult = await pool.query('SELECT AVG(rating) as avg, COUNT(*) as count FROM story_ratings WHERE story_id = $1', [story.id]);
+    const stats = statsResult.rows[0];
+    await pool.query('UPDATE stories SET rating_avg = $1, rating_count = $2 WHERE id = $3',
+      [Math.round(stats.avg * 10) / 10, stats.count, story.id]);
+
+    res.json({ rating_avg: Math.round(stats.avg * 10) / 10, rating_count: stats.count, user_rating: rating });
+  } catch (error) {
+    console.error('Error rating story:', error);
+    res.status(500).json({ error: 'Failed to rate story' });
   }
-
-  const story = db.prepare('SELECT id FROM stories WHERE id = ?').get(req.params.id);
-  if (!story) return res.status(404).json({ error: 'Story not found' });
-
-  const existing = db.prepare('SELECT rating FROM story_ratings WHERE user_id = ? AND story_id = ?')
-    .get(req.user.id, story.id);
-
-  if (existing) {
-    db.prepare('UPDATE story_ratings SET rating = ? WHERE user_id = ? AND story_id = ?')
-      .run(rating, req.user.id, story.id);
-  } else {
-    db.prepare('INSERT INTO story_ratings (user_id, story_id, rating) VALUES (?, ?, ?)')
-      .run(req.user.id, story.id, rating);
-  }
-
-  // Recalculate average
-  const stats = db.prepare('SELECT AVG(rating) as avg, COUNT(*) as count FROM story_ratings WHERE story_id = ?').get(story.id);
-  db.prepare('UPDATE stories SET rating_avg = ?, rating_count = ? WHERE id = ?')
-    .run(Math.round(stats.avg * 10) / 10, stats.count, story.id);
-
-  res.json({ rating_avg: Math.round(stats.avg * 10) / 10, rating_count: stats.count, user_rating: rating });
 });
 
 // POST /api/stories/:id/bookmark
-router.post('/:id/bookmark', authenticateToken, (req, res) => {
-  const story = db.prepare('SELECT id FROM stories WHERE id = ?').get(req.params.id);
-  if (!story) return res.status(404).json({ error: 'Story not found' });
+router.post('/:id/bookmark', authenticateToken, async (req, res) => {
+  try {
+    const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [req.params.id]);
+    const story = storyResult.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
 
-  const existing = db.prepare('SELECT id FROM bookmarks WHERE user_id = ? AND story_id = ?')
-    .get(req.user.id, story.id);
+    const existingResult = await pool.query('SELECT id FROM bookmarks WHERE user_id = $1 AND story_id = $2',
+      [req.user.id, story.id]);
+    const existing = existingResult.rows[0];
 
-  if (existing) {
-    db.prepare('DELETE FROM bookmarks WHERE user_id = ? AND story_id = ?').run(req.user.id, story.id);
-    return res.json({ bookmarked: false });
-  } else {
-    db.prepare('INSERT INTO bookmarks (id, user_id, story_id) VALUES (?, ?, ?)')
-      .run(uuidv4(), req.user.id, story.id);
-    return res.json({ bookmarked: true });
+    if (existing) {
+      await pool.query('DELETE FROM bookmarks WHERE user_id = $1 AND story_id = $2', [req.user.id, story.id]);
+      return res.json({ bookmarked: false });
+    } else {
+      await pool.query('INSERT INTO bookmarks (id, user_id, story_id) VALUES ($1, $2, $3)',
+        [uuidv4(), req.user.id, story.id]);
+      return res.json({ bookmarked: true });
+    }
+  } catch (error) {
+    console.error('Error updating bookmark:', error);
+    res.status(500).json({ error: 'Failed to update bookmark' });
   }
 });
 
