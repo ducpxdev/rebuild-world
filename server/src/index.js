@@ -10,6 +10,7 @@ import { getDatabaseInfo, initDb, pool } from './database.js';
 import authRoutes from './routes/auth.js';
 import storyRoutes from './routes/stories.js';
 import chapterRoutes from './routes/chapters.js';
+import volumeRoutes from './routes/volumes.js';
 import userRoutes from './routes/users.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,6 +26,7 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'uploads')));
 
 app.use('/api/auth', authRoutes);
 app.use('/api/stories', storyRoutes);
+app.use('/api/stories', volumeRoutes);
 app.use('/api/stories/:storyId/chapters', chapterRoutes);
 app.use('/api/users', userRoutes);
 

@@ -4,7 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield } from 'lucide-react';
 
-interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; }
+interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
+interface Volume { id: string; volume_number: number; title: string; cover_url?: string; description?: string; chapter_count?: number; }
 interface StoryDetail {
   id: string; title: string; description?: string; cover_url?: string;
   type: 'text' | 'comic'; genre?: string; tags?: string; status?: string;
@@ -44,19 +45,32 @@ export default function StoryPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const [story, setStory] = useState<StoryDetail | null>(null);
+  const [volumes, setVolumes] = useState<Volume[]>([]);
+  const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
   const [userRating, setUserRating] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkCount, setBookmarkCount] = useState(0);
   const [showAllChapters, setShowAllChapters] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showVolumeForm, setShowVolumeForm] = useState(false);
+  const [volumeForm, setVolumeForm] = useState({ title: '', description: '' });
+  const [volumeCover, setVolumeCover] = useState<File | null>(null);
 
   useEffect(() => {
-    api.get(`/stories/${id}`).then(r => {
-      setStory(r.data);
-      setUserRating(r.data.user_rating || 0);
-      setBookmarked(r.data.bookmarked || false);
-      setBookmarkCount(r.data.bookmark_count || 0);
+    Promise.all([
+      api.get(`/stories/${id}`),
+      api.get(`/stories/${id}/volumes`)
+    ]).then(([storyRes, volumesRes]) => {
+      setStory(storyRes.data);
+      setUserRating(storyRes.data.user_rating || 0);
+      setBookmarked(storyRes.data.bookmarked || false);
+      setBookmarkCount(storyRes.data.bookmark_count || 0);
+      setVolumes(volumesRes.data.volumes || []);
+      // Expand first volume by default
+      if (volumesRes.data.volumes?.length > 0) {
+        setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
+      }
     });
   }, [id]);
 
@@ -72,6 +86,33 @@ export default function StoryPage() {
     setBookmarkCount(c => c + (r.data.bookmarked ? 1 : -1));
   };
 
+  const createVolume = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!volumeForm.title.trim()) return;
+
+    const formData = new FormData();
+    formData.append('title', volumeForm.title);
+    formData.append('description', volumeForm.description);
+    formData.append('volume_number', String(volumes.length + 1));
+    if (volumeCover) {
+      formData.append('cover', volumeCover);
+    }
+
+    try {
+      await api.post(`/stories/${id}/volumes`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      setVolumeForm({ title: '', description: '' });
+      setVolumeCover(null);
+      setShowVolumeForm(false);
+      // Refresh volumes
+      const res = await api.get(`/stories/${id}/volumes`);
+      setVolumes(res.data.volumes || []);
+    } catch (error) {
+      console.error('Failed to create volume:', error);
+    }
+  };
+
   const handleShare = () => {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
@@ -85,7 +126,6 @@ export default function StoryPage() {
   );
 
   const tags = story.tags?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
-  const chaptersToShow = showAllChapters ? story.chapters : story.chapters.slice(0, 10);
   const descTruncated = story.description && story.description.length > 400 && !showFullDesc;
 
   return (
@@ -318,6 +358,74 @@ export default function StoryPage() {
         </div>
       </div>
 
+      {/* Volume creation form for admins */}
+      {user?.is_admin && story?.author_id === user?.id && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+          {!showVolumeForm ? (
+            <button
+              onClick={() => setShowVolumeForm(true)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 transition text-sm font-medium"
+            >
+              + Add New Volume
+            </button>
+          ) : (
+            <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+              <h3 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">Create New Volume</h3>
+              <form onSubmit={createVolume} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Volume Title</label>
+                  <input
+                    type="text"
+                    value={volumeForm.title}
+                    onChange={(e) => setVolumeForm(v => ({ ...v, title: e.target.value }))}
+                    placeholder="e.g., Arc 1: Beginning"
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Description (optional)</label>
+                  <textarea
+                    value={volumeForm.description}
+                    onChange={(e) => setVolumeForm(v => ({ ...v, description: e.target.value }))}
+                    placeholder="Brief description of this volume..."
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Cover Image (optional)</label>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => setVolumeCover(e.target.files?.[0] || null)}
+                    className="block w-full text-slate-400 text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border-0 file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20"
+                  />
+                </div>
+                <div className="flex gap-2 justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVolumeForm(false);
+                      setVolumeForm({ title: '', description: '' });
+                      setVolumeCover(null);
+                    }}
+                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition text-sm font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!volumeForm.title.trim()}
+                    className="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
+                  >
+                    Create Volume
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Chapter list — full-width section below */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
@@ -330,11 +438,11 @@ export default function StoryPage() {
               <div className="flex items-center justify-between gap-4">
                 <div>
                   <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                    <List className="w-5 h-5 text-cyan-500" /> {story.title}
+                    <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes' : 'Chapters'}
                   </h2>
                   <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
                     <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-semibold">
-                      {story.chapter_count} chapters
+                      {volumes.length > 0 ? `${volumes.length} volumes` : `${story.chapter_count} chapters`}
                     </span>
                     {story.chapters.length > 0 && (
                       <span className="flex items-center gap-1">
@@ -355,10 +463,82 @@ export default function StoryPage() {
 
           {story.chapters.length === 0 ? (
             <p className="text-slate-600 text-center py-16">No chapters published yet. Stay tuned!</p>
+          ) : volumes.length > 0 ? (
+            <div className="divide-y divide-slate-800/30">
+              {volumes.map(vol => (
+                <div key={vol.id}>
+                  {/* Volume header */}
+                  <button
+                    onClick={() => {
+                      const newExpanded = new Set(expandedVolumes);
+                      if (newExpanded.has(vol.id)) {
+                        newExpanded.delete(vol.id);
+                      } else {
+                        newExpanded.add(vol.id);
+                      }
+                      setExpandedVolumes(newExpanded);
+                    }}
+                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      {vol.cover_url && (
+                        <img src={vol.cover_url} alt="" className="w-12 h-16 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
+                      )}
+                      <div className="min-w-0">
+                        <span className="font-bold text-slate-300 group-hover:text-cyan-400 transition block">
+                          Volume {vol.volume_number}: {vol.title || `Volume ${vol.volume_number}`}
+                        </span>
+                        {vol.description && (
+                          <span className="text-sm text-slate-500 truncate block">{vol.description}</span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-slate-500 shrink-0 ml-4">
+                      <span className="text-xs">{story.chapters.filter(ch => ch.volume_id === vol.id).length} chapters</span>
+                      {expandedVolumes.has(vol.id) ? (
+                        <ChevronUp className="w-4 h-4" />
+                      ) : (
+                        <ChevronDown className="w-4 h-4" />
+                      )}
+                    </div>
+                  </button>
+
+                  {/* Chapter list for this volume */}
+                  {expandedVolumes.has(vol.id) && (
+                    <div className="bg-slate-900/20 divide-y divide-slate-800/20">
+                      {story.chapters
+                        .filter(ch => ch.volume_id === vol.id)
+                        .map(ch => (
+                          <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                            className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
+                                {ch.chapter_number}
+                              </span>
+                              <div className="min-w-0">
+                                <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
+                                  Chapter {ch.chapter_number}: {ch.title}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
+                              <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
+                              <span className="flex items-center gap-1 min-w-[70px] justify-end">
+                                <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
+                              </span>
+                              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                            </div>
+                          </Link>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
           ) : (
             <div>
               <div className="divide-y divide-slate-800/30">
-                {chaptersToShow.map(ch => (
+                {story.chapters.map(ch => (
                   <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
                     className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
                     <div className="flex items-center gap-3 min-w-0">

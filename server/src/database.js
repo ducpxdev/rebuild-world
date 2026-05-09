@@ -91,10 +91,26 @@ export async function initDb() {
       )
     `);
 
+    // Volumes table - new structure for organizing chapters
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS volumes (
+        id TEXT PRIMARY KEY,
+        story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+        volume_number INTEGER NOT NULL,
+        title TEXT,
+        cover_url TEXT,
+        description TEXT,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
+        updated_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
+        UNIQUE(story_id, volume_number)
+      )
+    `);
+
     await pool.query(`
       CREATE TABLE IF NOT EXISTS chapters (
         id TEXT PRIMARY KEY,
         story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+        volume_id TEXT REFERENCES volumes(id) ON DELETE CASCADE,
         chapter_number INTEGER NOT NULL,
         title TEXT,
         content TEXT,

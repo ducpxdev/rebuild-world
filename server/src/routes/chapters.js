@@ -49,7 +49,7 @@ router.post('/', authenticateToken, requireAdmin, upload.array('images', 50), as
     const story = storyResult.rows[0];
     if (!story) return res.status(404).json({ error: 'Story not found' });
 
-    const { title, content } = req.body;
+    const { title, content, volume_id } = req.body;
 
     const lastResult = await pool.query('SELECT MAX(chapter_number) as max FROM chapters WHERE story_id = $1', [story.id]);
     const chapter_number = (lastResult.rows[0]?.max ?? 0) + 1;
@@ -67,9 +67,9 @@ router.post('/', authenticateToken, requireAdmin, upload.array('images', 50), as
 
     const id = uuidv4();
     await pool.query(`
-      INSERT INTO chapters (id, story_id, chapter_number, title, content, images)
-      VALUES ($1, $2, $3, $4, $5, $6)
-    `, [id, story.id, chapter_number, title || `Chapter ${chapter_number}`, content || null, images]);
+      INSERT INTO chapters (id, story_id, volume_id, chapter_number, title, content, images)
+      VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `, [id, story.id, volume_id || null, chapter_number, title || `Chapter ${chapter_number}`, content || null, images]);
 
     await pool.query("UPDATE stories SET updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $1", [story.id]);
 
