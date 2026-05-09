@@ -646,28 +646,46 @@ export default function StoryPage() {
                         {volChapters.length === 0 ? (
                           <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
                         ) : (
-                          volChapters.map(ch => (
-                            <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                              className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
-                              <div className="flex items-center gap-3 min-w-0">
-                                <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
-                                  {ch.chapter_number}
-                                </span>
-                                <div className="min-w-0">
-                                  <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                                    Chapter {ch.chapter_number}: {ch.title}
-                                  </span>
-                                </div>
-                              </div>
-                              <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
-                                <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
-                                <span className="flex items-center gap-1 min-w-[70px] justify-end">
-                                  <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
-                                </span>
-                                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                              </div>
-                            </Link>
-                          ))
+                          <>
+                            {volChapters.slice(0, 5).map(ch => {
+                              // Check if chapter is new (created within last 7 days)
+                              const isNew = (Date.now() / 1000 - ch.created_at) < 7 * 24 * 3600;
+                              return (
+                                <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                                  <div className="flex items-center gap-3 min-w-0">
+                                    {isNew && (
+                                      <span className="text-xs font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
+                                        Mới
+                                      </span>
+                                    )}
+                                    <div className="min-w-0">
+                                      <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition block">
+                                        Chương {ch.chapter_number}: {ch.title}
+                                      </span>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0 ml-4">
+                                    <span className="min-w-[75px] text-right">
+                                      {new Date(ch.created_at * 1000).toLocaleDateString('vi-VN')}
+                                    </span>
+                                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                                  </div>
+                                </Link>
+                              );
+                            })}
+                            {volChapters.length > 5 && (
+                              <button
+                                onClick={() => {
+                                  // For now, just expand to show all chapters
+                                  // This is a placeholder for future pagination implementation
+                                }}
+                                className="w-full px-6 py-3 text-center text-cyan-400 hover:bg-cyan-500/5 transition text-sm font-medium border-t border-slate-800/20"
+                              >
+                                Xem tiếp ({volChapters.length - 5} chương)
+                              </button>
+                            )}
+                          </>
                         )}
 
                         {/* Chapter creation form for admins - shown below chapter list */}
