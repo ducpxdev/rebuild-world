@@ -238,4 +238,58 @@ router.post('/:id/bookmark', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/stories/:id/comments
+router.get('/:id/comments', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT sc.*, u.username, u.avatar_url
+      FROM story_comments sc
+      JOIN users u ON sc.user_id = u.id
+      WHERE sc.story_id = $1
+      ORDER BY sc.created_at DESC
+    `, [req.params.id]);
+
+    res.json({ comments: result.rows });
+  } catch (error) {
+    console.error('Error fetching story comments:', error);
+    res.status(500).json({ error: 'Failed to fetch comments' });
+  }
+});
+
+// POST /api/stories/:id/comments
+router.post('/:id/comments', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+
+    if (!content?.trim()) {
+      return res.status(400).json({ error: 'Comment cannot be empty' });
+    }
+
+    // Verify story exists
+    const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [id]);
+    if (storyResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Story not found' });
+    }
+
+    const commentId = uuidv4();
+    await pool.query(
+      'INSERT INTO story_comments (id, story_id, user_id, content) VALUES ($1, $2, $3, $4)',
+      [commentId, id, req.user.id, content.trim()]
+    );
+
+    const commentResult = await pool.query(`
+      SELECT sc.*, u.username, u.avatar_url
+      FROM story_comments sc
+      JOIN users u ON sc.user_id = u.id
+      WHERE sc.id = $1
+    `, [commentId]);
+
+    res.status(201).json(commentResult.rows[0]);
+  } catch (error) {
+    console.error('Error creating story comment:', error);
+    res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
+
 export default router;

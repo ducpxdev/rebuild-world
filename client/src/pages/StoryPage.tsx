@@ -56,19 +56,28 @@ export default function StoryPage() {
   const [showVolumeForm, setShowVolumeForm] = useState(false);
   const [volumeForm, setVolumeForm] = useState({ title: '', description: '' });
   const [volumeCover, setVolumeCover] = useState<File | null>(null);
+  const [volumeLoading, setVolumeLoading] = useState(false);
+  const [volumeError, setVolumeError] = useState('');
+  const [volumeSuccess, setVolumeSuccess] = useState(false);
+  const [comments, setComments] = useState<any[]>([]);
+  const [newComment, setNewComment] = useState('');
+  const [commentLoading, setCommentLoading] = useState(false);
+  const [commentError, setCommentError] = useState('');
 
   useEffect(() => {
     const loadStory = async () => {
       try {
-        const [storyRes, volumesRes] = await Promise.all([
+        const [storyRes, volumesRes, commentsRes] = await Promise.all([
           api.get(`/stories/${id}`),
-          api.get(`/stories/${id}/volumes`).catch(() => ({ data: { volumes: [] } }))
+          api.get(`/stories/${id}/volumes`).catch(() => ({ data: { volumes: [] } })),
+          api.get(`/stories/${id}/comments`).catch(() => ({ data: { comments: [] } }))
         ]);
         setStory(storyRes.data);
         setUserRating(storyRes.data.user_rating || 0);
         setBookmarked(storyRes.data.bookmarked || false);
         setBookmarkCount(storyRes.data.bookmark_count || 0);
         setVolumes(volumesRes.data.volumes || []);
+        setComments(commentsRes.data.comments || []);
         // Expand first volume by default
         if (volumesRes.data.volumes?.length > 0) {
           setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
@@ -104,6 +113,8 @@ export default function StoryPage() {
       formData.append('cover', volumeCover);
     }
 
+    setVolumeLoading(true);
+    setVolumeError('');
     try {
       await api.post(`/stories/${id}/volumes`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
@@ -111,11 +122,18 @@ export default function StoryPage() {
       setVolumeForm({ title: '', description: '' });
       setVolumeCover(null);
       setShowVolumeForm(false);
+      setVolumeSuccess(true);
       // Refresh volumes
       const res = await api.get(`/stories/${id}/volumes`);
       setVolumes(res.data.volumes || []);
-    } catch (error) {
+      // Clear success message after 2 seconds
+      setTimeout(() => setVolumeSuccess(false), 2000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || 'Failed to create volume';
+      setVolumeError(errorMsg);
       console.error('Failed to create volume:', error);
+    } finally {
+      setVolumeLoading(false);
     }
   };
 
@@ -123,6 +141,24 @@ export default function StoryPage() {
     navigator.clipboard.writeText(window.location.href);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const addComment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newComment.trim() || !user) return;
+
+    setCommentLoading(true);
+    setCommentError('');
+    try {
+      const res = await api.post(`/stories/${id}/comments`, { content: newComment });
+      setComments([res.data, ...comments]);
+      setNewComment('');
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || 'Failed to post comment';
+      setCommentError(errorMsg);
+    } finally {
+      setCommentLoading(false);
+    }
   };
 
   if (!story) return (
@@ -377,6 +413,16 @@ export default function StoryPage() {
           ) : (
             <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
               <h3 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">Create New Volume</h3>
+              {volumeSuccess && (
+                <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
+                  ✓ Volume created successfully!
+                </div>
+              )}
+              {volumeError && (
+                <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
+                  ✗ {volumeError}
+                </div>
+              )}
               <form onSubmit={createVolume} className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-300 mb-1">Volume Title</label>
@@ -385,7 +431,8 @@ export default function StoryPage() {
                     value={volumeForm.title}
                     onChange={(e) => setVolumeForm(v => ({ ...v, title: e.target.value }))}
                     placeholder="e.g., Arc 1: Beginning"
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500"
+                    disabled={volumeLoading}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -394,7 +441,8 @@ export default function StoryPage() {
                     value={volumeForm.description}
                     onChange={(e) => setVolumeForm(v => ({ ...v, description: e.target.value }))}
                     placeholder="Brief description of this volume..."
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24"
+                    disabled={volumeLoading}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div>
@@ -403,7 +451,8 @@ export default function StoryPage() {
                     type="file"
                     accept="image/*"
                     onChange={(e) => setVolumeCover(e.target.files?.[0] || null)}
-                    className="block w-full text-slate-400 text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border-0 file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20"
+                    disabled={volumeLoading}
+                    className="block w-full text-slate-400 text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border-0 file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -413,17 +462,19 @@ export default function StoryPage() {
                       setShowVolumeForm(false);
                       setVolumeForm({ title: '', description: '' });
                       setVolumeCover(null);
+                      setVolumeError('');
                     }}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 transition text-sm font-medium"
+                    disabled={volumeLoading}
+                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    disabled={!volumeForm.title.trim()}
+                    disabled={!volumeForm.title.trim() || volumeLoading}
                     className="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
                   >
-                    Create Volume
+                    {volumeLoading ? 'Creating...' : 'Create Volume'}
                   </button>
                 </div>
               </form>
@@ -575,6 +626,83 @@ export default function StoryPage() {
               )}
             </div>
           )}
+        </div>
+      </div>
+
+      {/* Comments section */}
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+        <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
+          <div className="p-6 border-b border-slate-800/40">
+            <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-cyan-500" /> Comments
+            </h2>
+          </div>
+
+          <div className="p-6">
+            {/* Comment form */}
+            {user ? (
+              <form onSubmit={addComment} className="mb-6 space-y-3">
+                {commentError && (
+                  <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
+                    ✗ {commentError}
+                  </div>
+                )}
+                <textarea
+                  value={newComment}
+                  onChange={(e) => setNewComment(e.target.value)}
+                  placeholder="Share your thoughts about this story..."
+                  disabled={commentLoading}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
+                />
+                <div className="flex justify-end">
+                  <button
+                    type="submit"
+                    disabled={!newComment.trim() || commentLoading}
+                    className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
+                  >
+                    {commentLoading ? 'Posting...' : 'Post Comment'}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <div className="mb-6 p-4 rounded-lg bg-slate-900/50 border border-slate-700/50 text-slate-400 text-sm text-center">
+                <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium">
+                  Sign in
+                </Link>
+                {' '}to comment on this story
+              </div>
+            )}
+
+            {/* Comments list */}
+            {comments.length === 0 ? (
+              <p className="text-slate-600 text-center py-8">No comments yet. Be the first to comment!</p>
+            ) : (
+              <div className="space-y-4 divide-y divide-slate-800/30">
+                {comments.map(comment => (
+                  <div key={comment.id} className="pt-4 first:pt-0">
+                    <div className="flex items-start gap-3">
+                      {comment.avatar_url ? (
+                        <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                      ) : (
+                        <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
+                          <User className="w-5 h-5 text-slate-600" />
+                        </div>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-slate-300">{comment.username}</span>
+                          <span className="text-xs text-slate-600">
+                            {new Date(comment.created_at * 1000).toLocaleDateString()}
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-sm mt-1 break-words">{comment.content}</p>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

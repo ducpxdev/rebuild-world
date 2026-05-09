@@ -173,6 +173,16 @@ export async function initDb() {
       )
     `);
 
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS story_comments (
+        id TEXT PRIMARY KEY,
+        story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW())
+      )
+    `);
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
