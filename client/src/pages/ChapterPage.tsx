@@ -109,7 +109,7 @@ export default function ChapterPage() {
           <Link to={`/story/${id}`} className="text-sm text-slate-500 hover:text-cyan-400 transition truncate max-w-[40%]">
             ← {chapter.story_title}
           </Link>
-          <span className="text-sm font-medium text-slate-300 font-['Rajdhani'] tracking-wide">Ch. {chapter.chapter_number}: {chapter.title}</span>
+          <span className="text-sm font-medium text-slate-300 font-['Rajdhani'] tracking-wide">{chapter.title}</span>
           <div className="flex items-center gap-1">
             {user?.is_admin && (
               <Link to={`/story/${id}/chapter/${number}/edit`} className="p-2 rounded-lg hover:bg-cyan-500/5 text-slate-500 hover:text-cyan-400 transition" title="Edit chapter">

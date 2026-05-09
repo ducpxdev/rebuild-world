@@ -875,7 +875,7 @@ export default function StoryPage() {
                                     )}
                                     <div className="min-w-0">
                                       <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition block">
-                                        Chương {ch.chapter_number}: {ch.title}
+                                        {ch.title}
                                       </span>
                                     </div>
                                   </div>
@@ -1112,7 +1112,7 @@ export default function StoryPage() {
                     </span>
                     <div className="min-w-0">
                       <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                        Chapter {ch.chapter_number}: {ch.title}
+                        {ch.title}
                       </span>
                     </div>
                   </div>
