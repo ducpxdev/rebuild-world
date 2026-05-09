@@ -46,8 +46,11 @@ router.get('/:number', optionalAuth, async (req, res) => {
 router.post('/', authenticateToken, upload.array('images', 50), async (req, res) => {
   try {
     console.log('[Chapter Create] User:', req.user.id, 'Story:', req.params.storyId);
-    console.log('[Chapter Create] Body:', { title: req.body.title, content: req.body.content?.substring(0, 50), volume_id: req.body.volume_id });
-    console.log('[Chapter Create] Files:', req.files?.length || 0);
+    console.log('[Chapter Create] Content-Type:', req.headers['content-type']);
+    console.log('[Chapter Create] req.body keys:', Object.keys(req.body));
+    console.log('[Chapter Create] req.body:', req.body);
+    console.log('[Chapter Create] req.files count:', req.files?.length || 0);
+    console.log('[Chapter Create] Files:', req.files?.map(f => f.filename) || []);
 
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
