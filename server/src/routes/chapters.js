@@ -43,14 +43,15 @@ router.get('/:number', optionalAuth, async (req, res) => {
 });
 
 // POST /api/stories/:storyId/chapters — author or admin
-router.post('/', authenticateToken, upload.array('images', 50), async (req, res) => {
+// Use upload.any() to handle both 'images' and 'text_images' fields
+router.post('/', authenticateToken, upload.any(), async (req, res) => {
   try {
     console.log('[Chapter Create] User:', req.user.id, 'Story:', req.params.storyId);
     console.log('[Chapter Create] Content-Type:', req.headers['content-type']);
     console.log('[Chapter Create] req.body keys:', Object.keys(req.body));
     console.log('[Chapter Create] req.body:', req.body);
     console.log('[Chapter Create] req.files count:', req.files?.length || 0);
-    console.log('[Chapter Create] Files:', req.files?.map(f => f.filename) || []);
+    console.log('[Chapter Create] Files:', req.files?.map(f => ({ fieldname: f.fieldname, filename: f.filename })) || []);
 
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
@@ -80,17 +81,42 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
     const lastResult = await pool.query('SELECT MAX(chapter_number) as max FROM chapters WHERE story_id = $1', [story.id]);
     const chapter_number = (lastResult.rows[0]?.max ?? 0) + 1;
 
-    const images = req.files?.length
-      ? JSON.stringify(req.files.map(f => `/uploads/${f.filename}`))
+    // Handle comic images (main content) - fieldname: 'images'
+    const comicImages = req.files
+      ?.filter(f => f.fieldname === 'images')
+      .map(f => `/uploads/${f.filename}`);
+    const images = comicImages?.length 
+      ? JSON.stringify(comicImages)
       : null;
+
+    // Handle text chapter embedded images - fieldname: 'text_images'
+    let finalContent = content;
+    const textImages = req.files?.filter(f => f.fieldname === 'text_images');
+    if (textImages && textImages.length > 0 && story.type === 'text') {
+      console.log('[Chapter Create] Processing', textImages.length, 'text images');
+      // Create a map of image URLs
+      const imageUrls = textImages.map(f => `/uploads/${f.filename}`);
+      
+      // Replace markdown image placeholders with actual URLs
+      // The frontend inserts ![image-N](blob:...) syntax, we replace it with real URLs
+      let imageIndex = 0;
+      finalContent = finalContent.replace(/!\[image-\d+\]\([^)]*\)/g, () => {
+        if (imageIndex < imageUrls.length) {
+          return `![image-${imageIndex + 1}](${imageUrls[imageIndex++]})`;
+        }
+        return '';
+      });
+      
+      console.log('[Chapter Create] Replaced image URLs in content');
+    }
 
     // Validation
     if (story.type === 'text') {
-      if (!title && !content) {
+      if (!title && !finalContent) {
         console.log('[Chapter Create] Text chapter without title or content');
         return res.status(400).json({ error: 'Title and content are required' });
       }
-      if (!content) {
+      if (!finalContent) {
         console.log('[Chapter Create] Text chapter without content');
         return res.status(400).json({ error: 'Content is required for text chapters' });
       }
@@ -113,7 +139,7 @@ router.post('/', authenticateToken, upload.array('images', 50), async (req, res)
     await pool.query(`
       INSERT INTO chapters (id, story_id, volume_id, chapter_number, title, content, images)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [id, story.id, volume_id || null, chapter_number, title || `Chapter ${chapter_number}`, content || null, images]);
+    `, [id, story.id, volume_id || null, chapter_number, title || `Chapter ${chapter_number}`, finalContent || null, images]);
 
     await pool.query("UPDATE stories SET updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $1", [story.id]);
 

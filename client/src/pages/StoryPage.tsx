@@ -271,7 +271,10 @@ export default function StoryPage() {
     formData.append('volume_id', volumeId);
     if (story.type === 'text') {
       formData.append('content', form.content);
+      // For text chapters, also upload any embedded images
+      form.images.forEach(img => formData.append('text_images', img));
     } else {
+      // For comic chapters, images are the main content
       form.images.forEach(img => formData.append('images', img));
     }
 
@@ -925,19 +928,78 @@ export default function StoryPage() {
                                   </div>
 
                                   {story.type === 'text' ? (
-                                    <div>
-                                      <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
-                                      <textarea
-                                        value={chapterForms[vol.id]?.content || ''}
-                                        onChange={(e) => setChapterForms(prev => ({
-                                          ...prev,
-                                          [vol.id]: { ...prev[vol.id], content: e.target.value }
-                                        }))}
-                                        placeholder="Write chapter content here..."
-                                        disabled={chapterLoading[vol.id]}
-                                        rows={12}
-                                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
-                                      />
+                                    <div className="space-y-4">
+                                      <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
+                                        <textarea
+                                          value={chapterForms[vol.id]?.content || ''}
+                                          onChange={(e) => setChapterForms(prev => ({
+                                            ...prev,
+                                            [vol.id]: { ...prev[vol.id], content: e.target.value }
+                                          }))}
+                                          placeholder="Write chapter content here... You can insert images below."
+                                          disabled={chapterLoading[vol.id]}
+                                          rows={10}
+                                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
+                                        />
+                                      </div>
+
+                                      <div>
+                                        <label className="block text-sm font-medium text-slate-300 mb-2">Insert Images into Content</label>
+                                        <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
+                                          <Image className="w-6 h-6 text-slate-600 mb-1" />
+                                          <span className="text-sm text-slate-500">Click to add images</span>
+                                          <span className="text-xs text-slate-600 mt-1">Images will be inserted into your content</span>
+                                          <input
+                                            type="file"
+                                            accept="image/*"
+                                            multiple
+                                            onChange={(e) => handleChapterImages(vol.id, e)}
+                                            disabled={chapterLoading[vol.id]}
+                                            className="hidden"
+                                          />
+                                        </label>
+
+                                        {(chapterPreviews[vol.id] || []).length > 0 && (
+                                          <div className="mt-3 space-y-2">
+                                            <p className="text-xs text-slate-400">Click an image to insert it into your content:</p>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                              {chapterPreviews[vol.id].map((src, i) => (
+                                                <div key={i} className="relative group">
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                      // Insert markdown image syntax into content at cursor position
+                                                      const imageName = `image-${i + 1}`;
+                                                      const markdownImage = `![${imageName}](${src})\n`;
+                                                      setChapterForms(prev => ({
+                                                        ...prev,
+                                                        [vol.id]: {
+                                                          ...prev[vol.id],
+                                                          content: prev[vol.id].content + markdownImage
+                                                        }
+                                                      }));
+                                                    }}
+                                                    className="w-full text-left"
+                                                  >
+                                                    <img src={src} alt={`Image ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border border-slate-700 hover:border-cyan-500 transition group-hover:opacity-75" />
+                                                    <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition rounded-lg">
+                                                      Click to insert
+                                                    </span>
+                                                  </button>
+                                                  <button
+                                                    type="button"
+                                                    onClick={() => removeChapterImage(vol.id, i)}
+                                                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs"
+                                                  >
+                                                    <X className="w-3 h-3" />
+                                                  </button>
+                                                </div>
+                                              ))}
+                                            </div>
+                                          </div>
+                                        )}
+                                      </div>
                                     </div>
                                   ) : (
                                     <div>

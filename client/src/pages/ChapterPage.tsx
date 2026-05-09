@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
@@ -10,6 +11,64 @@ interface ChapterData {
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
   prev: number | null; next: number | null; comments: Comment[];
 }
+
+// Parse markdown content and render with embedded images
+const renderMarkdownContent = (content: string): ReactNode => {
+  // Split content by markdown image syntax: ![alt](url)
+  const parts: (string | ReactNode)[] = [];
+  const imageRegex = /!\[([^\]]*)\]\(([^)]+)\)/g;
+  let lastIndex = 0;
+  let match;
+
+  while ((match = imageRegex.exec(content)) !== null) {
+    // Add text before image
+    if (match.index > lastIndex) {
+      const textBefore = content.slice(lastIndex, match.index);
+      if (textBefore.trim()) {
+        parts.push(
+          <p key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+            {textBefore}
+          </p>
+        );
+      }
+    }
+
+    // Add image
+    const [, alt, src] = match;
+    parts.push(
+      <div key={`img-${match.index}`} className="my-4">
+        <img
+          src={src}
+          alt={alt || 'Chapter image'}
+          className="w-full max-w-2xl mx-auto rounded-lg border border-slate-700 shadow-lg"
+          loading="lazy"
+        />
+        {alt && <p className="text-center text-sm text-slate-500 mt-2 italic">{alt}</p>}
+      </div>
+    );
+
+    lastIndex = imageRegex.lastIndex;
+  }
+
+  // Add remaining text after last image
+  if (lastIndex < content.length) {
+    const textAfter = content.slice(lastIndex);
+    if (textAfter.trim()) {
+      parts.push(
+        <p key={`text-${lastIndex}`} className="whitespace-pre-wrap">
+          {textAfter}
+        </p>
+      );
+    }
+  }
+
+  // If no images found, just return the content as is
+  if (parts.length === 0) {
+    return <p className="whitespace-pre-wrap">{content}</p>;
+  }
+
+  return parts;
+};
 
 export default function ChapterPage() {
   const { id, number } = useParams<{ id: string; number: string }>();
@@ -83,8 +142,8 @@ export default function ChapterPage() {
             onDragStart={e => e.preventDefault()}
           >
             <h1 className="text-2xl font-bold text-slate-100 mb-6 font-['Rajdhani'] tracking-wide">{chapter.title}</h1>
-            <div className="prose prose-invert prose-lg max-w-none text-slate-300 leading-relaxed whitespace-pre-wrap">
-              {chapter.content}
+            <div className="space-y-4 text-slate-300 leading-relaxed">
+              {chapter.content && renderMarkdownContent(chapter.content)}
             </div>
           </article>
         ) : (
