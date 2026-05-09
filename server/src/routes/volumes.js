@@ -59,6 +59,9 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
     const { storyId } = req.params;
     const { title, description, volume_number } = req.body;
 
+    console.log('[Volume Create] File uploaded:', req.file?.filename);
+    console.log('[Volume Create] Volume data:', { title, description, volume_number });
+
     // Verify user owns the story
     const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [storyId]);
     if (storyResult.rows.length === 0 || storyResult.rows[0].author_id !== req.user.id) {
@@ -67,6 +70,8 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
 
     const volumeId = uuidv4();
     const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
+    
+    console.log('[Volume Create] Cover URL:', cover_url);
 
     await pool.query(
       `INSERT INTO volumes (id, story_id, volume_number, title, description, cover_url) 
@@ -74,7 +79,8 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
       [volumeId, storyId, volume_number, title, description, cover_url]
     );
 
-    res.status(201).json({ id: volumeId, message: 'Volume created successfully' });
+    console.log('[Volume Create] Volume created:', volumeId, 'with cover:', cover_url);
+    res.status(201).json({ id: volumeId, cover_url, message: 'Volume created successfully' });
   } catch (error) {
     console.error('Error creating volume:', error);
     if (error.code === '23505') {
@@ -90,6 +96,9 @@ router.put('/:storyId/volumes/:volumeId', authenticateToken, upload.single('cove
     const { storyId, volumeId } = req.params;
     const { title, description } = req.body;
 
+    console.log('[Volume Update] File uploaded:', req.file?.filename);
+    console.log('[Volume Update] Volume data:', { title, description });
+
     // Verify user owns the story
     const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [storyId]);
     if (storyResult.rows.length === 0 || storyResult.rows[0].author_id !== req.user.id) {
@@ -97,20 +106,28 @@ router.put('/:storyId/volumes/:volumeId', authenticateToken, upload.single('cove
     }
 
     const cover_url = req.file ? `/uploads/${req.file.filename}` : undefined;
+    
+    console.log('[Volume Update] Cover URL:', cover_url);
 
     if (cover_url) {
+      console.log('[Volume Update] Updating with new cover image');
       await pool.query(
         'UPDATE volumes SET title = $1, description = $2, cover_url = $3, updated_at = EXTRACT(epoch FROM NOW()) WHERE id = $4 AND story_id = $5',
         [title, description, cover_url, volumeId, storyId]
       );
     } else {
+      console.log('[Volume Update] Updating without changing cover image');
       await pool.query(
         'UPDATE volumes SET title = $1, description = $2, updated_at = EXTRACT(epoch FROM NOW()) WHERE id = $3 AND story_id = $4',
         [title, description, volumeId, storyId]
       );
     }
 
-    res.json({ message: 'Volume updated successfully' });
+    // Fetch updated volume to return cover_url
+    const updatedVolume = await pool.query('SELECT * FROM volumes WHERE id = $1', [volumeId]);
+    console.log('[Volume Update] Volume updated:', volumeId, 'cover_url:', updatedVolume.rows[0]?.cover_url);
+
+    res.json({ ...updatedVolume.rows[0], message: 'Volume updated successfully' });
   } catch (error) {
     console.error('Error updating volume:', error);
     res.status(500).json({ error: 'Failed to update volume' });
