@@ -35,31 +35,8 @@ passport.use(new GoogleStrategy.Strategy({
           [profile.id, 'google', profile.photos?.[0]?.value, user.id]
         );
       } else {
-        // Create new user from Google profile
-        const id = uuidv4();
-        const email = profile.emails?.[0]?.value;
-        // Generate unique username from Google display name
-        let username = profile.displayName?.replace(/\s+/g, '_').toLowerCase() || `user_${id.slice(0, 8)}`;
-        
-        // Check if username is taken
-        let usernameResult = await pool.query('SELECT id FROM users WHERE username = $1', [username]);
-        if (usernameResult.rows.length > 0) {
-          username = `${username}_${id.slice(0, 4)}`;
-        }
-
-        user = {
-          id,
-          username,
-          email,
-          google_id: profile.id,
-          avatar_url: profile.photos?.[0]?.value,
-          provider: 'google'
-        };
-
-        await pool.query(
-          'INSERT INTO users (id, username, email, google_id, provider, avatar_url, is_verified) VALUES ($1, $2, $3, $4, $5, $6, 1)',
-          [id, username, email, profile.id, 'google', profile.photos?.[0]?.value]
-        );
+        // Google sign-up is disabled - only existing users can use Google login
+        return done(new Error('Google sign-up is disabled. Please register with email and password, or contact support if you have an existing account.'));
       }
     }
 
