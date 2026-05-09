@@ -651,10 +651,38 @@ export default function StoryPage() {
 
                     {/* Expanded volume content */}
                     {expandedVolumes.has(vol.id) && (
-                      <div className="bg-slate-900/20">
-                        {/* Chapter creation form for admins */}
+                      <div className="bg-slate-900/20 divide-y divide-slate-800/20">
+                        {/* Chapter list - shown first */}
+                        {volChapters.length === 0 ? (
+                          <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
+                        ) : (
+                          volChapters.map(ch => (
+                            <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                              className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                              <div className="flex items-center gap-3 min-w-0">
+                                <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
+                                  {ch.chapter_number}
+                                </span>
+                                <div className="min-w-0">
+                                  <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
+                                    Chapter {ch.chapter_number}: {ch.title}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
+                                <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
+                                <span className="flex items-center gap-1 min-w-[70px] justify-end">
+                                  <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
+                                </span>
+                                <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                              </div>
+                            </Link>
+                          ))
+                        )}
+
+                        {/* Chapter creation form for admins - shown below chapter list */}
                         {user?.is_admin && story?.author_id === user?.id && (
-                          <div className="border-b border-slate-800/20">
+                          <div>
                             {!expandedChapterForms.has(vol.id) ? (
                               <button
                                 onClick={() => {
@@ -791,36 +819,6 @@ export default function StoryPage() {
                             )}
                           </div>
                         )}
-
-                        {/* Chapter list */}
-                        <div className="divide-y divide-slate-800/20">
-                          {volChapters.length === 0 ? (
-                            <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
-                          ) : (
-                            volChapters.map(ch => (
-                              <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                                className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
-                                <div className="flex items-center gap-3 min-w-0">
-                                  <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
-                                    {ch.chapter_number}
-                                  </span>
-                                  <div className="min-w-0">
-                                    <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                                      Chapter {ch.chapter_number}: {ch.title}
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
-                                  <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
-                                  <span className="flex items-center gap-1 min-w-[70px] justify-end">
-                                    <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
-                                  </span>
-                                  <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                                </div>
-                              </Link>
-                            ))
-                          )}
-                        </div>
                       </div>
                     )}
                   </div>
