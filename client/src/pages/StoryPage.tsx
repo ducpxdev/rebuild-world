@@ -589,7 +589,7 @@ export default function StoryPage() {
             )}
             <div className="flex-1 min-w-0">
               <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes & Chapters' : 'Chapters'}
+                <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes' : 'Chapters'}
               </h2>
               <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
                 <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-semibold">
@@ -605,7 +605,7 @@ export default function StoryPage() {
             </div>
           </div>
 
-          {story.chapters.length === 0 ? (
+          {story.chapters.length === 0 && volumes.length === 0 ? (
             <p className="text-slate-600 text-center py-16">No chapters published yet. Stay tuned!</p>
           ) : volumes.length > 0 ? (
             <div className="divide-y divide-slate-800/30">
