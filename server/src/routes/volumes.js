@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken } from '../middleware/auth.js';
-import { upload } from '../middleware/upload.js';
+import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
 
 const router = Router();
 
@@ -52,7 +52,7 @@ router.get('/:storyId/volumes/:volumeId', async (req, res) => {
 });
 
 // POST create volume
-router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), async (req, res) => {
+router.post('/:storyId/volumes', authenticateToken, uploadDb.single('cover'), saveUploadedFiles, async (req, res) => {
   try {
     const { storyId } = req.params;
     const { title, description, volume_number } = req.body;
@@ -68,7 +68,7 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
     }
 
     const volumeId = uuidv4();
-    const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
+    const cover_url = req.file ? req.file.url : null;
     
     console.log('[Volume Create] Generated cover_url:', cover_url);
 
@@ -91,7 +91,7 @@ router.post('/:storyId/volumes', authenticateToken, upload.single('cover'), asyn
 });
 
 // PUT update volume
-router.put('/:storyId/volumes/:volumeId', authenticateToken, upload.single('cover'), async (req, res) => {
+router.put('/:storyId/volumes/:volumeId', authenticateToken, uploadDb.single('cover'), saveUploadedFiles, async (req, res) => {
   try {
     const { storyId, volumeId } = req.params;
     const { title, description } = req.body;
@@ -105,7 +105,7 @@ router.put('/:storyId/volumes/:volumeId', authenticateToken, upload.single('cove
       return res.status(403).json({ error: 'Unauthorized' });
     }
 
-    const cover_url = req.file ? `/uploads/${req.file.filename}` : undefined;
+    const cover_url = req.file ? req.file.url : undefined;
     
     console.log('[Volume Update] Cover URL:', cover_url);
 

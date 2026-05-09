@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken, optionalAuth, requireAdmin } from '../middleware/auth.js';
-import { upload } from '../middleware/upload.js';
+import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
 
 const router = Router();
 
@@ -102,14 +102,14 @@ router.get('/:id', optionalAuth, async (req, res) => {
 });
 
 // POST /api/stories — admin only
-router.post('/', authenticateToken, requireAdmin, upload.single('cover'), async (req, res) => {
+router.post('/', authenticateToken, requireAdmin, uploadDb.single('cover'), saveUploadedFiles, async (req, res) => {
   try {
     const { title, description, type, genre, tags, status } = req.body;
     if (!title || !type) return res.status(400).json({ error: 'Title and type are required' });
     if (!['text', 'comic'].includes(type)) return res.status(400).json({ error: 'Type must be text or comic' });
 
     const id = uuidv4();
-    const cover_url = req.file ? `/uploads/${req.file.filename}` : null;
+    const cover_url = req.file ? req.file.url : null;
 
     await pool.query(`
       INSERT INTO stories (id, author_id, title, description, cover_url, type, genre, tags, status)
@@ -131,14 +131,14 @@ router.post('/', authenticateToken, requireAdmin, upload.single('cover'), async 
 });
 
 // PUT /api/stories/:id — admin only
-router.put('/:id', authenticateToken, requireAdmin, upload.single('cover'), async (req, res) => {
+router.put('/:id', authenticateToken, requireAdmin, uploadDb.single('cover'), saveUploadedFiles, async (req, res) => {
   try {
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.id]);
     const story = storyResult.rows[0];
     if (!story) return res.status(404).json({ error: 'Story not found' });
 
     const { title, description, genre, tags, status, is_published } = req.body;
-    const cover_url = req.file ? `/uploads/${req.file.filename}` : story.cover_url;
+    const cover_url = req.file ? req.file.url : story.cover_url;
 
     await pool.query(`
       UPDATE stories SET title = $1, description = $2, cover_url = $3, genre = $4, tags = $5,

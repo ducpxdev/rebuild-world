@@ -13,6 +13,7 @@ import storyRoutes from './routes/stories.js';
 import chapterRoutes from './routes/chapters.js';
 import volumeRoutes from './routes/volumes.js';
 import userRoutes from './routes/users.js';
+import imagesRoutes from './routes/images.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -45,6 +46,7 @@ app.use('/api/stories', storyRoutes);
 app.use('/api/stories', volumeRoutes);
 app.use('/api/stories/:storyId/chapters', chapterRoutes);
 app.use('/api/users', userRoutes);
+app.use('/api/images', imagesRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ 

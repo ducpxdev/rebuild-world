@@ -183,6 +183,18 @@ export async function initDb() {
       )
     `);
 
+    // Images table for persistent database-backed storage
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS images (
+        id TEXT PRIMARY KEY,
+        filename TEXT NOT NULL UNIQUE,
+        mimetype TEXT NOT NULL,
+        data BYTEA NOT NULL,
+        size INTEGER NOT NULL,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW())
+      )
+    `);
+
     // Migration: Add volume_id column to chapters table if it doesn't exist
     try {
       await pool.query(`

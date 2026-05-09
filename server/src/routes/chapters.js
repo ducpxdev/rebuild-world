@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken, optionalAuth, requireAdmin } from '../middleware/auth.js';
-import { upload } from '../middleware/upload.js';
+import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
 
 const router = Router({ mergeParams: true });
 
@@ -43,8 +43,8 @@ router.get('/:number', optionalAuth, async (req, res) => {
 });
 
 // POST /api/stories/:storyId/chapters — author or admin
-// Use upload.any() to handle both 'images' and 'text_images' fields
-router.post('/', authenticateToken, upload.any(), async (req, res) => {
+// Use uploadDb.any() to handle both 'images' and 'text_images' fields with database storage
+router.post('/', authenticateToken, uploadDb.any(), saveUploadedFiles, async (req, res) => {
   try {
     console.log('[Chapter Create] User:', req.user.id, 'Story:', req.params.storyId);
     console.log('[Chapter Create] Content-Type:', req.headers['content-type']);
@@ -94,8 +94,8 @@ router.post('/', authenticateToken, upload.any(), async (req, res) => {
     const textImages = req.files?.filter(f => f.fieldname === 'text_images');
     if (textImages && textImages.length > 0 && story.type === 'text') {
       console.log('[Chapter Create] Processing', textImages.length, 'text images');
-      // Create a map of image URLs
-      const imageUrls = textImages.map(f => `/uploads/${f.filename}`);
+      // Create a map of database-backed image URLs
+      const imageUrls = textImages.map(f => f.url);
       
       // Replace markdown image placeholders with actual URLs
       // The frontend inserts ![image-N](blob:...) syntax, we replace it with real URLs
@@ -188,7 +188,7 @@ router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req
     // Handle comic images (main content) - fieldname: 'images'
     const comicImages = req.files
       ?.filter(f => f.fieldname === 'images')
-      .map(f => `/uploads/${f.filename}`);
+      .map(f => f.url);
     const images = comicImages?.length 
       ? JSON.stringify(comicImages)
       : chapter.images;
@@ -198,8 +198,8 @@ router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req
     const textImages = req.files?.filter(f => f.fieldname === 'text_images');
     if (textImages && textImages.length > 0 && story.type === 'text') {
       console.log('[Chapter Update] Processing', textImages.length, 'text images');
-      // Create a map of image URLs
-      const imageUrls = textImages.map(f => `/uploads/${f.filename}`);
+      // Create a map of database-backed image URLs
+      const imageUrls = textImages.map(f => f.url);
       
       // Replace markdown image placeholders with actual URLs
       let imageIndex = 0;
