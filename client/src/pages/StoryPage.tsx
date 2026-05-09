@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
-import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield } from 'lucide-react';
+import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X } from 'lucide-react';
 
 interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
 interface Volume { id: string; volume_number: number; title: string; cover_url?: string; description?: string; chapter_count?: number; }
@@ -47,10 +47,10 @@ export default function StoryPage() {
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
+  const [expandedChapterForms, setExpandedChapterForms] = useState<Set<string>>(new Set());
   const [userRating, setUserRating] = useState(0);
   const [bookmarked, setBookmarked] = useState(false);
   const [bookmarkCount, setBookmarkCount] = useState(0);
-  const [showAllChapters, setShowAllChapters] = useState(false);
   const [showFullDesc, setShowFullDesc] = useState(false);
   const [copied, setCopied] = useState(false);
   const [showVolumeForm, setShowVolumeForm] = useState(false);
@@ -59,6 +59,14 @@ export default function StoryPage() {
   const [volumeLoading, setVolumeLoading] = useState(false);
   const [volumeError, setVolumeError] = useState('');
   const [volumeSuccess, setVolumeSuccess] = useState(false);
+  
+  // Per-volume chapter creation state
+  const [chapterForms, setChapterForms] = useState<Record<string, { title: string; content: string; images: File[] }>>({});
+  const [chapterPreviews, setChapterPreviews] = useState<Record<string, string[]>>({});
+  const [chapterLoading, setChapterLoading] = useState<Record<string, boolean>>({});
+  const [chapterErrors, setChapterErrors] = useState<Record<string, string>>({});
+  const [chapterSuccess, setChapterSuccess] = useState<Record<string, boolean>>({});
+  
   const [comments, setComments] = useState<any[]>([]);
   const [newComment, setNewComment] = useState('');
   const [commentLoading, setCommentLoading] = useState(false);
@@ -140,6 +148,93 @@ export default function StoryPage() {
       setVolumeError(errorMsg);
     } finally {
       setVolumeLoading(false);
+    }
+  };
+
+  const initializeChapterForm = (volumeId: string) => {
+    if (!chapterForms[volumeId]) {
+      setChapterForms(prev => ({ ...prev, [volumeId]: { title: '', content: '', images: [] } }));
+      setChapterPreviews(prev => ({ ...prev, [volumeId]: [] }));
+      setChapterLoading(prev => ({ ...prev, [volumeId]: false }));
+      setChapterErrors(prev => ({ ...prev, [volumeId]: '' }));
+    }
+  };
+
+  const handleChapterImages = (volumeId: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    setChapterForms(prev => ({
+      ...prev,
+      [volumeId]: { ...prev[volumeId], images: [...(prev[volumeId]?.images || []), ...files] }
+    }));
+    const previews = files.map(f => URL.createObjectURL(f));
+    setChapterPreviews(prev => ({
+      ...prev,
+      [volumeId]: [...(prev[volumeId] || []), ...previews]
+    }));
+  };
+
+  const removeChapterImage = (volumeId: string, idx: number) => {
+    setChapterForms(prev => ({
+      ...prev,
+      [volumeId]: { ...prev[volumeId], images: prev[volumeId].images.filter((_, i) => i !== idx) }
+    }));
+    setChapterPreviews(prev => ({
+      ...prev,
+      [volumeId]: prev[volumeId].filter((_, i) => i !== idx)
+    }));
+  };
+
+  const createChapter = async (volumeId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!story) return;
+
+    const form = chapterForms[volumeId];
+    if (!form || !form.title.trim()) return;
+
+    if (story.type === 'text' && !form.content.trim()) {
+      setChapterErrors(prev => ({ ...prev, [volumeId]: 'Content is required for text chapters' }));
+      return;
+    }
+    if (story.type === 'comic' && form.images.length === 0) {
+      setChapterErrors(prev => ({ ...prev, [volumeId]: 'At least one image is required for comic chapters' }));
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', form.title);
+    formData.append('volume_id', volumeId);
+    if (story.type === 'text') {
+      formData.append('content', form.content);
+    } else {
+      form.images.forEach(img => formData.append('images', img));
+    }
+
+    setChapterLoading(prev => ({ ...prev, [volumeId]: true }));
+    setChapterErrors(prev => ({ ...prev, [volumeId]: '' }));
+    try {
+      await api.post(`/stories/${id}/chapters`, formData);
+      
+      // Reset form
+      setChapterForms(prev => ({ ...prev, [volumeId]: { title: '', content: '', images: [] } }));
+      setChapterPreviews(prev => ({ ...prev, [volumeId]: [] }));
+      setExpandedChapterForms(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(volumeId);
+        return newSet;
+      });
+      
+      setChapterSuccess(prev => ({ ...prev, [volumeId]: true }));
+      setTimeout(() => setChapterSuccess(prev => ({ ...prev, [volumeId]: false })), 2000);
+      
+      // Refresh story chapters
+      const res = await api.get(`/stories/${id}`);
+      setStory(res.data);
+    } catch (error: any) {
+      console.error('Chapter creation error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to create chapter';
+      setChapterErrors(prev => ({ ...prev, [volumeId]: errorMsg }));
+    } finally {
+      setChapterLoading(prev => ({ ...prev, [volumeId]: false }));
     }
   };
 
@@ -255,14 +350,9 @@ export default function StoryPage() {
                   <Share2 className="w-4 h-4" /> {copied ? 'Copied!' : 'Share'}
                 </button>
                 {user?.is_admin && (
-                  <>
-                    <Link to={`/story/${story.id}/add-chapter`} className="flex items-center gap-1.5 px-4 py-3 rounded-lg border border-cyan-500/20 text-cyan-400 hover:bg-cyan-500/10 transition text-sm font-medium">
-                      + Chapter
-                    </Link>
-                    <Link to={`/story/${story.id}/edit`} className="px-4 py-3 rounded-lg border border-slate-700 text-slate-500 hover:border-cyan-500/30 hover:text-cyan-400 transition text-sm">
-                      Edit Series
-                    </Link>
-                  </>
+                  <Link to={`/story/${story.id}/edit`} className="px-4 py-3 rounded-lg border border-slate-700 text-slate-500 hover:border-cyan-500/30 hover:text-cyan-400 transition text-sm">
+                    Edit Series
+                  </Link>
                 )}
               </div>
             </div>
@@ -414,7 +504,7 @@ export default function StoryPage() {
               onClick={() => setShowVolumeForm(true)}
               className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 transition text-sm font-medium"
             >
-              + Add New Volume
+              + Create New Volume
             </button>
           ) : (
             <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
@@ -489,36 +579,27 @@ export default function StoryPage() {
         </div>
       )}
 
-      {/* Chapter list — full-width section below */}
+      {/* Volumes and Chapters section */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
-          {/* Chapter header with cover thumbnail */}
+          {/* Header */}
           <div className="flex items-start gap-4 p-6 border-b border-slate-800/40">
             {story.cover_url && (
               <img src={story.cover_url} alt="" className="w-16 h-22 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
             )}
             <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between gap-4">
-                <div>
-                  <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                    <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes' : 'Chapters'}
-                  </h2>
-                  <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                    <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-semibold">
-                      {volumes.length > 0 ? `${volumes.length} volumes` : `${story.chapter_count} chapters`}
-                    </span>
-                    {story.chapters.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <Clock className="w-3.5 h-3.5" />
-                        Last updated {timeSince(story.chapters[story.chapters.length - 1].created_at)}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {user?.is_admin && (
-                  <Link to={`/story/${story.id}/add-chapter`} className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 transition text-sm font-medium shrink-0">
-                    + Add Chapter
-                  </Link>
+              <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
+                <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes & Chapters' : 'Chapters'}
+              </h2>
+              <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
+                <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-semibold">
+                  {volumes.length > 0 ? `${volumes.length} volumes` : `${story.chapter_count} chapters`}
+                </span>
+                {story.chapters.length > 0 && (
+                  <span className="flex items-center gap-1">
+                    <Clock className="w-3.5 h-3.5" />
+                    Last updated {timeSince(story.chapters[story.chapters.length - 1].created_at)}
+                  </span>
                 )}
               </div>
             </div>
@@ -528,108 +609,248 @@ export default function StoryPage() {
             <p className="text-slate-600 text-center py-16">No chapters published yet. Stay tuned!</p>
           ) : volumes.length > 0 ? (
             <div className="divide-y divide-slate-800/30">
-              {volumes.map(vol => (
-                <div key={vol.id}>
-                  {/* Volume header */}
-                  <button
-                    onClick={() => {
-                      const newExpanded = new Set(expandedVolumes);
-                      if (newExpanded.has(vol.id)) {
-                        newExpanded.delete(vol.id);
-                      } else {
-                        newExpanded.add(vol.id);
-                      }
-                      setExpandedVolumes(newExpanded);
-                    }}
-                    className="w-full flex items-center justify-between px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
-                  >
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      {vol.cover_url && (
-                        <img src={vol.cover_url} alt="" className="w-12 h-16 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
-                      )}
-                      <div className="min-w-0">
-                        <span className="font-bold text-slate-300 group-hover:text-cyan-400 transition block">
-                          Volume {vol.volume_number}: {vol.title || `Volume ${vol.volume_number}`}
-                        </span>
-                        {vol.description && (
-                          <span className="text-sm text-slate-500 truncate block">{vol.description}</span>
+              {volumes.map((vol) => {
+                const volChapters = story.chapters.filter(ch => ch.volume_id === vol.id);
+                return (
+                  <div key={vol.id}>
+                    {/* Volume header */}
+                    <button
+                      onClick={() => {
+                        const newExpanded = new Set(expandedVolumes);
+                        if (newExpanded.has(vol.id)) {
+                          newExpanded.delete(vol.id);
+                        } else {
+                          newExpanded.add(vol.id);
+                        }
+                        setExpandedVolumes(newExpanded);
+                      }}
+                      className="w-full flex items-center justify-between px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
+                    >
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {vol.cover_url && (
+                          <img src={vol.cover_url} alt="" className="w-12 h-16 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
+                        )}
+                        <div className="min-w-0">
+                          <span className="font-bold text-slate-300 group-hover:text-cyan-400 transition block">
+                            Volume {vol.volume_number}: {vol.title || `Volume ${vol.volume_number}`}
+                          </span>
+                          {vol.description && (
+                            <span className="text-sm text-slate-500 truncate block">{vol.description}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-500 shrink-0 ml-4">
+                        <span className="text-xs">{volChapters.length} chapters</span>
+                        {expandedVolumes.has(vol.id) ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
                         )}
                       </div>
-                    </div>
-                    <div className="flex items-center gap-2 text-slate-500 shrink-0 ml-4">
-                      <span className="text-xs">{story.chapters.filter(ch => ch.volume_id === vol.id).length} chapters</span>
-                      {expandedVolumes.has(vol.id) ? (
-                        <ChevronUp className="w-4 h-4" />
-                      ) : (
-                        <ChevronDown className="w-4 h-4" />
-                      )}
-                    </div>
-                  </button>
+                    </button>
 
-                  {/* Chapter list for this volume */}
-                  {expandedVolumes.has(vol.id) && (
-                    <div className="bg-slate-900/20 divide-y divide-slate-800/20">
-                      {story.chapters
-                        .filter(ch => ch.volume_id === vol.id)
-                        .map(ch => (
-                          <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                            className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
-                                {ch.chapter_number}
-                              </span>
-                              <div className="min-w-0">
-                                <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                                  Chapter {ch.chapter_number}: {ch.title}
-                                </span>
+                    {/* Expanded volume content */}
+                    {expandedVolumes.has(vol.id) && (
+                      <div className="bg-slate-900/20">
+                        {/* Chapter creation form for admins */}
+                        {user?.is_admin && story?.author_id === user?.id && (
+                          <div className="border-b border-slate-800/20">
+                            {!expandedChapterForms.has(vol.id) ? (
+                              <button
+                                onClick={() => {
+                                  initializeChapterForm(vol.id);
+                                  setExpandedChapterForms(prev => new Set([...prev, vol.id]));
+                                }}
+                                className="w-full px-6 py-3 flex items-center gap-2 text-cyan-400 hover:bg-cyan-500/5 transition text-sm font-medium"
+                              >
+                                <Plus className="w-4 h-4" /> Create Chapter in This Volume
+                              </button>
+                            ) : (
+                              <div className="p-6 space-y-4">
+                                <div className="flex justify-between items-center">
+                                  <h4 className="font-bold text-slate-200">Create New Chapter</h4>
+                                  <button
+                                    onClick={() => setExpandedChapterForms(prev => {
+                                      const newSet = new Set(prev);
+                                      newSet.delete(vol.id);
+                                      return newSet;
+                                    })}
+                                    className="text-slate-500 hover:text-slate-300"
+                                  >
+                                    <X className="w-4 h-4" />
+                                  </button>
+                                </div>
+
+                                {chapterSuccess[vol.id] && (
+                                  <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
+                                    ✓ Chapter created successfully!
+                                  </div>
+                                )}
+                                {chapterErrors[vol.id] && (
+                                  <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
+                                    ✗ {chapterErrors[vol.id]}
+                                  </div>
+                                )}
+
+                                <form onSubmit={(e) => createChapter(vol.id, e)} className="space-y-4">
+                                  <div>
+                                    <label className="block text-sm font-medium text-slate-300 mb-1">Chapter Title</label>
+                                    <input
+                                      type="text"
+                                      value={chapterForms[vol.id]?.title || ''}
+                                      onChange={(e) => setChapterForms(prev => ({
+                                        ...prev,
+                                        [vol.id]: { ...prev[vol.id], title: e.target.value }
+                                      }))}
+                                      placeholder={`e.g., Chapter ${volChapters.length + 1}: Title`}
+                                      disabled={chapterLoading[vol.id]}
+                                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                                    />
+                                  </div>
+
+                                  {story.type === 'text' ? (
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
+                                      <textarea
+                                        value={chapterForms[vol.id]?.content || ''}
+                                        onChange={(e) => setChapterForms(prev => ({
+                                          ...prev,
+                                          [vol.id]: { ...prev[vol.id], content: e.target.value }
+                                        }))}
+                                        placeholder="Write chapter content here..."
+                                        disabled={chapterLoading[vol.id]}
+                                        rows={12}
+                                        className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
+                                      />
+                                    </div>
+                                  ) : (
+                                    <div>
+                                      <label className="block text-sm font-medium text-slate-300 mb-1">Upload Pages</label>
+                                      <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
+                                        <Image className="w-8 h-8 text-slate-600 mb-2" />
+                                        <span className="text-sm text-slate-500">Click to upload images</span>
+                                        <span className="text-xs text-slate-600 mt-1">PNG, JPG, WebP up to 10MB each</span>
+                                        <input
+                                          type="file"
+                                          accept="image/*"
+                                          multiple
+                                          onChange={(e) => handleChapterImages(vol.id, e)}
+                                          disabled={chapterLoading[vol.id]}
+                                          className="hidden"
+                                        />
+                                      </label>
+
+                                      {(chapterPreviews[vol.id] || []).length > 0 && (
+                                        <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-4">
+                                          {chapterPreviews[vol.id].map((src, i) => (
+                                            <div key={i} className="relative group">
+                                              <img src={src} alt={`Page ${i + 1}`} className="w-full aspect-[3/4] object-cover rounded-lg border border-slate-800/60" />
+                                              <span className="absolute bottom-2 left-2 bg-black/60 text-slate-300 text-xs px-2 py-0.5 rounded">{i + 1}</span>
+                                              <button
+                                                type="button"
+                                                onClick={() => removeChapterImage(vol.id, i)}
+                                                className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                              >
+                                                <X className="w-3 h-3" />
+                                              </button>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  <div className="flex gap-2 justify-end pt-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setExpandedChapterForms(prev => {
+                                          const newSet = new Set(prev);
+                                          newSet.delete(vol.id);
+                                          return newSet;
+                                        });
+                                        setChapterForms(prev => ({ ...prev, [vol.id]: { title: '', content: '', images: [] } }));
+                                        setChapterPreviews(prev => ({ ...prev, [vol.id]: [] }));
+                                        setChapterErrors(prev => ({ ...prev, [vol.id]: '' }));
+                                      }}
+                                      disabled={chapterLoading[vol.id]}
+                                      className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition text-sm font-medium"
+                                    >
+                                      Cancel
+                                    </button>
+                                    <button
+                                      type="submit"
+                                      disabled={!chapterForms[vol.id]?.title.trim() || chapterLoading[vol.id]}
+                                      className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 transition text-sm font-medium"
+                                    >
+                                      {chapterLoading[vol.id] ? 'Publishing...' : 'Publish Chapter'}
+                                    </button>
+                                  </div>
+                                </form>
                               </div>
-                            </div>
-                            <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
-                              <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
-                              <span className="flex items-center gap-1 min-w-[70px] justify-end">
-                                <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
-                              </span>
-                              <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                            </div>
-                          </Link>
-                        ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+                            )}
+                          </div>
+                        )}
+
+                        {/* Chapter list */}
+                        <div className="divide-y divide-slate-800/20">
+                          {volChapters.length === 0 ? (
+                            <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
+                          ) : (
+                            volChapters.map(ch => (
+                              <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                                className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
+                                    {ch.chapter_number}
+                                  </span>
+                                  <div className="min-w-0">
+                                    <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
+                                      Chapter {ch.chapter_number}: {ch.title}
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
+                                  <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
+                                  <span className="flex items-center gap-1 min-w-[70px] justify-end">
+                                    <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
+                                  </span>
+                                  <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                                </div>
+                              </Link>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ) : (
-            <div>
-              <div className="divide-y divide-slate-800/30">
-                {story.chapters.map(ch => (
-                  <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                    className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
-                        {ch.chapter_number}
+            <div className="divide-y divide-slate-800/30">
+              {story.chapters.map(ch => (
+                <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
+                      {ch.chapter_number}
+                    </span>
+                    <div className="min-w-0">
+                      <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
+                        Chapter {ch.chapter_number}: {ch.title}
                       </span>
-                      <div className="min-w-0">
-                        <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                          Chapter {ch.chapter_number}: {ch.title}
-                        </span>
-                      </div>
                     </div>
-                    <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
-                      <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
-                      <span className="flex items-center gap-1 min-w-[70px] justify-end">
-                        <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
-                      </span>
-                      <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                    </div>
-                  </Link>
-                ))}
-              </div>
-              {story.chapters.length > 10 && (
-                <button onClick={() => setShowAllChapters(!showAllChapters)}
-                  className="w-full py-3.5 border-t border-slate-800/40 text-sm text-cyan-400 hover:bg-cyan-500/5 transition flex items-center justify-center gap-1 font-medium">
-                  {showAllChapters ? <><ChevronUp className="w-4 h-4" /> Show Less</> : <><ChevronDown className="w-4 h-4" /> Show All {story.chapter_count} Chapters</>}
-                </button>
-              )}
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
+                    <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
+                    <span className="flex items-center gap-1 min-w-[70px] justify-end">
+                      <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
+                    </span>
+                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                  </div>
+                </Link>
+              ))}
             </div>
           )}
         </div>
