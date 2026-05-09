@@ -183,6 +183,19 @@ export async function initDb() {
       )
     `);
 
+    // Migration: Add volume_id column to chapters table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE chapters ADD COLUMN volume_id TEXT REFERENCES volumes(id) ON DELETE CASCADE
+      `);
+      console.log('✓ Added volume_id column to chapters table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding volume_id column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
