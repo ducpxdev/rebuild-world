@@ -42,8 +42,9 @@ export default function CreateStoryPage() {
     try {
       const r = await api.post('/stories', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       navigate(`/story/${r.data.id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to create story');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to create story');
     } finally {
       setLoading(false);
     }

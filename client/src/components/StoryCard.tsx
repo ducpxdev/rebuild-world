@@ -15,7 +15,7 @@ interface StoryCardProps {
   status?: string;
 }
 
-export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, rating_count: _rc, chapter_count, status }: StoryCardProps) {
+export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status }: StoryCardProps) {
   return (
     <Link to={`/story/${id}`} className="group block bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden hover:border-cyan-500/30 hover:-translate-y-1 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,212,255,0.08)]">
       {/* Cover */}

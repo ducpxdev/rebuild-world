@@ -46,8 +46,9 @@ export default function AddChapterPage() {
     try {
       await api.post(`/stories/${id}/chapters`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       navigate(`/story/${id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to add chapter');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to add chapter');
     } finally {
       setLoading(false);
     }

@@ -69,8 +69,9 @@ function ResetForm({ token }: { token: string }) {
     try {
       await api.post('/auth/reset-password', { token, password });
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Reset failed');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Reset failed');
     } finally {
       setLoading(false);
     }

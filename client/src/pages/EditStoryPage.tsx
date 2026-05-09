@@ -63,8 +63,9 @@ export default function EditStoryPage() {
     try {
       await api.put(`/stories/${id}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       navigate(`/story/${id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to update story');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to update story');
     } finally {
       setSaving(false);
     }
@@ -75,8 +76,9 @@ export default function EditStoryPage() {
     try {
       await api.delete(`/stories/${id}`);
       navigate('/dashboard');
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete story');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to delete story');
       setDeleting(false);
     }
   };

@@ -11,6 +11,7 @@ export default function VerifyEmailPage() {
   useEffect(() => {
     const token = params.get('token');
     if (!token) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setStatus('error');
       setMessage('No verification token provided');
       return;

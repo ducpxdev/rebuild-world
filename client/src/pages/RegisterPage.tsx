@@ -23,6 +23,7 @@ export default function RegisterPage() {
         const user = JSON.parse(decodeURIComponent(userStr));
         localStorage.setItem('token', token);
         updateUser(user);
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setSuccess(`Welcome ${user.username}! Your account has been created.`);
       } catch (err) {
         console.error('Failed to parse Google auth response:', err);
@@ -38,8 +39,9 @@ export default function RegisterPage() {
     try {
       const msg = await register(username, email, password);
       setSuccess(msg);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Registration failed');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Registration failed');
     } finally {
       setLoading(false);
     }

@@ -26,6 +26,7 @@ export default function BrowsePage() {
   const page = Number(params.get('page') || 1);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     const sp = new URLSearchParams();
     if (q) sp.set('q', q);

@@ -61,8 +61,9 @@ export default function EditChapterPage() {
     try {
       await api.put(`/stories/${id}/chapters/${number}`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       navigate(`/story/${id}/chapter/${number}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to update chapter');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to update chapter');
     } finally {
       setSaving(false);
     }
@@ -73,8 +74,9 @@ export default function EditChapterPage() {
     try {
       await api.delete(`/stories/${id}/chapters/${number}`);
       navigate(`/story/${id}`);
-    } catch (err: any) {
-      setError(err.response?.data?.error || 'Failed to delete chapter');
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string } } };
+      setError(error.response?.data?.error || 'Failed to delete chapter');
       setDeleting(false);
     }
   };
