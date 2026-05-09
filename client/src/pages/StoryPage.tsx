@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
-import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X } from 'lucide-react';
+import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit } from 'lucide-react';
 
 interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
 interface Volume { id: string; volume_number: number; title: string; cover_url?: string; description?: string; chapter_count?: number; }
@@ -59,6 +59,15 @@ export default function StoryPage() {
   const [volumeLoading, setVolumeLoading] = useState(false);
   const [volumeError, setVolumeError] = useState('');
   const [volumeSuccess, setVolumeSuccess] = useState(false);
+  
+  // Edit volume state
+  const [editingVolumeId, setEditingVolumeId] = useState<string | null>(null);
+  const [editVolumeForm, setEditVolumeForm] = useState({ title: '', description: '' });
+  const [editVolumeCover, setEditVolumeCover] = useState<File | null>(null);
+  const [editVolumeCoverPreview, setEditVolumeCoverPreview] = useState<string>('');
+  const [editVolumeLoading, setEditVolumeLoading] = useState(false);
+  const [editVolumeError, setEditVolumeError] = useState('');
+  const [editVolumeSuccess, setEditVolumeSuccess] = useState(false);
   
   // Per-volume chapter creation state
   const [chapterForms, setChapterForms] = useState<Record<string, { title: string; content: string; images: File[] }>>({});
@@ -148,6 +157,63 @@ export default function StoryPage() {
       setVolumeError(errorMsg);
     } finally {
       setVolumeLoading(false);
+    }
+  };
+
+  const editVolume = async (volumeId: string, e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editVolumeForm.title.trim()) return;
+
+    const formData = new FormData();
+    formData.append('title', editVolumeForm.title);
+    formData.append('description', editVolumeForm.description);
+    if (editVolumeCover) {
+      formData.append('cover', editVolumeCover);
+    }
+
+    setEditVolumeLoading(true);
+    setEditVolumeError('');
+    try {
+      await api.put(`/stories/${id}/volumes/${volumeId}`, formData);
+      setEditingVolumeId(null);
+      setEditVolumeForm({ title: '', description: '' });
+      setEditVolumeCover(null);
+      setEditVolumeCoverPreview('');
+      setEditVolumeSuccess(true);
+      
+      // Refresh volumes
+      const res = await api.get(`/stories/${id}/volumes`);
+      setVolumes(res.data.volumes || []);
+      
+      // Also refresh the story to get updated chapter data
+      const storyRes = await api.get(`/stories/${id}`);
+      setStory(storyRes.data);
+      
+      // Clear success message after 2 seconds
+      setTimeout(() => setEditVolumeSuccess(false), 2000);
+    } catch (error: any) {
+      console.error('Volume edit error:', error.response?.data || error.message);
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to edit volume';
+      setEditVolumeError(errorMsg);
+    } finally {
+      setEditVolumeLoading(false);
+    }
+  };
+
+  const initializeEditVolumeForm = (vol: Volume) => {
+    setEditingVolumeId(vol.id);
+    setEditVolumeForm({ title: vol.title || '', description: vol.description || '' });
+    setEditVolumeCover(null);
+    setEditVolumeCoverPreview(vol.cover_url || '');
+    setEditVolumeError('');
+  };
+
+  const handleEditVolumeCover = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setEditVolumeCover(file);
+      const preview = URL.createObjectURL(file);
+      setEditVolumeCoverPreview(preview);
     }
   };
 
@@ -614,34 +680,148 @@ export default function StoryPage() {
                 return (
                   <div key={vol.id}>
                     {/* Volume header - cover image and title */}
-                    <button
-                      onClick={() => {
-                        const newExpanded = new Set(expandedVolumes);
-                        if (newExpanded.has(vol.id)) {
-                          newExpanded.delete(vol.id);
-                        } else {
-                          newExpanded.add(vol.id);
-                        }
-                        setExpandedVolumes(newExpanded);
-                      }}
-                      className="w-full flex items-center gap-4 px-6 py-4 hover:bg-cyan-500/[0.03] transition group text-left"
-                    >
-                      {vol.cover_url && (
-                        <img src={vol.cover_url} alt="" className="w-16 h-24 rounded-lg object-cover border border-slate-700/50 shrink-0" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <span className="text-lg font-bold text-slate-300 group-hover:text-cyan-400 transition block">
-                          {vol.title || `Volume ${vol.volume_number}`}
-                        </span>
-                        {vol.description && (
-                          <span className="text-sm text-slate-500 line-clamp-2 block mt-1">{vol.description}</span>
+                    <div className="flex items-center gap-2 px-6 py-4 hover:bg-cyan-500/[0.03] transition group">
+                      <button
+                        onClick={() => {
+                          const newExpanded = new Set(expandedVolumes);
+                          if (newExpanded.has(vol.id)) {
+                            newExpanded.delete(vol.id);
+                          } else {
+                            newExpanded.add(vol.id);
+                          }
+                          setExpandedVolumes(newExpanded);
+                        }}
+                        className="flex-1 flex items-center gap-4 text-left"
+                      >
+                        {vol.cover_url && (
+                          <img src={vol.cover_url} alt="" className="w-16 h-24 rounded-lg object-cover border border-slate-700/50 shrink-0" />
                         )}
-                      </div>
-                    </button>
+                        <div className="min-w-0 flex-1">
+                          <span className="text-lg font-bold text-slate-300 group-hover:text-cyan-400 transition block">
+                            {vol.title || `Volume ${vol.volume_number}`}
+                          </span>
+                          {vol.description && (
+                            <span className="text-sm text-slate-500 line-clamp-2 block mt-1">{vol.description}</span>
+                          )}
+                        </div>
+                      </button>
+                      
+                      {/* Edit button - only show for story author */}
+                      {user?.id === story?.author_id && (
+                        <button
+                          onClick={() => initializeEditVolumeForm(vol)}
+                          className="shrink-0 p-2 text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/5 rounded transition"
+                          title="Edit volume"
+                        >
+                          <Edit className="w-5 h-5" />
+                        </button>
+                      )}
+                    </div>
 
                     {/* Expanded volume content */}
                     {expandedVolumes.has(vol.id) && (
                       <div className="bg-slate-900/20 divide-y divide-slate-800/20">
+                        {/* Edit volume form - shown when editing */}
+                        {editingVolumeId === vol.id && (
+                          <div className="p-6 space-y-4 bg-slate-800/30 border-b border-slate-800/40">
+                            <div className="flex justify-between items-center">
+                              <h4 className="font-bold text-slate-200">Edit Volume</h4>
+                              <button
+                                onClick={() => setEditingVolumeId(null)}
+                                className="text-slate-500 hover:text-slate-300"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                            </div>
+                            
+                            {editVolumeError && (
+                              <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
+                                ✗ {editVolumeError}
+                              </div>
+                            )}
+                            
+                            {editVolumeSuccess && (
+                              <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
+                                ✓ Volume updated successfully!
+                              </div>
+                            )}
+                            
+                            <form onSubmit={(e) => editVolume(vol.id, e)} className="space-y-4">
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Volume Title</label>
+                                <input
+                                  type="text"
+                                  value={editVolumeForm.title}
+                                  onChange={(e) => setEditVolumeForm(prev => ({ ...prev, title: e.target.value }))}
+                                  placeholder="e.g., Arc 1: The Beginning"
+                                  disabled={editVolumeLoading}
+                                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                                <textarea
+                                  value={editVolumeForm.description}
+                                  onChange={(e) => setEditVolumeForm(prev => ({ ...prev, description: e.target.value }))}
+                                  placeholder="Brief description of this volume..."
+                                  disabled={editVolumeLoading}
+                                  rows={3}
+                                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
+                                />
+                              </div>
+                              
+                              <div>
+                                <label className="block text-sm font-medium text-slate-300 mb-2">Cover Image</label>
+                                {editVolumeCoverPreview && (
+                                  <div className="mb-3 relative inline-block">
+                                    <img src={editVolumeCoverPreview} alt="" className="w-24 h-32 rounded-lg object-cover border border-slate-700" />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setEditVolumeCover(null);
+                                        setEditVolumeCoverPreview('');
+                                      }}
+                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition"
+                                    >
+                                      <X className="w-3 h-3" />
+                                    </button>
+                                  </div>
+                                )}
+                                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
+                                  <Image className="w-8 h-8 text-slate-600 mb-2" />
+                                  <span className="text-sm text-slate-500">Click to change cover image</span>
+                                  <input
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleEditVolumeCover}
+                                    disabled={editVolumeLoading}
+                                    className="hidden"
+                                  />
+                                </label>
+                              </div>
+                              
+                              <div className="flex gap-2 justify-end pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingVolumeId(null)}
+                                  disabled={editVolumeLoading}
+                                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition text-sm font-medium"
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  type="submit"
+                                  disabled={!editVolumeForm.title.trim() || editVolumeLoading}
+                                  className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 transition text-sm font-medium"
+                                >
+                                  {editVolumeLoading ? 'Updating...' : 'Save Changes'}
+                                </button>
+                              </div>
+                            </form>
+                          </div>
+                        )}
+                        
                         {/* Chapter list - shown first */}
                         {volChapters.length === 0 ? (
                           <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
