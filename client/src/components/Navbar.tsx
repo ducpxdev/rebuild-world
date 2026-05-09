@@ -83,14 +83,16 @@ export default function Navbar() {
                     </span>
                   )}
                 </Link>
-                <Link to={`/user/${user.username}`} className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 transition rounded-lg hover:bg-cyan-500/5">
-                  {user.avatar_url ? (
-                    <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-md object-cover ring-1 ring-cyan-500/30" />
-                  ) : (
-                    <User className="w-4 h-4" />
-                  )}
-                  {user.username}
-                </Link>
+                {user.username && (
+                  <Link to={`/user/${user.username}`} className="flex items-center gap-1.5 px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 transition rounded-lg hover:bg-cyan-500/5">
+                    {user.avatar_url ? (
+                      <img src={user.avatar_url} alt="" className="w-6 h-6 rounded-md object-cover ring-1 ring-cyan-500/30" />
+                    ) : (
+                      <User className="w-4 h-4" />
+                    )}
+                    {user.username}
+                  </Link>
+                )}
                 <button onClick={logout} className="px-3 py-2 text-sm text-slate-500 hover:text-red-400 transition rounded-lg hover:bg-red-500/5">
                   <LogOut className="w-4 h-4" />
                 </button>
@@ -140,7 +142,9 @@ export default function Navbar() {
                 <Link to="/notifications" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-3 py-2 text-slate-400 hover:bg-cyan-500/5 rounded-lg">
                   Notifications {unreadCount > 0 && <span className="bg-cyan-500 text-black text-xs px-1.5 rounded-full font-bold">{unreadCount}</span>}
                 </Link>
-                <Link to={`/user/${user.username}`} onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-slate-400 hover:bg-cyan-500/5 rounded-lg">Profile</Link>
+                {user.username && (
+                  <Link to={`/user/${user.username}`} onClick={() => setMobileOpen(false)} className="block px-3 py-2 text-slate-400 hover:bg-cyan-500/5 rounded-lg">Profile</Link>
+                )}
                 <button onClick={() => { logout(); setMobileOpen(false); }} className="block w-full text-left px-3 py-2 text-red-400 hover:bg-red-500/5 rounded-lg">Log Out</button>
               </>
             ) : (
