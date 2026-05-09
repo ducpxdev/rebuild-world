@@ -117,6 +117,7 @@ export async function initDb() {
         images TEXT,
         views INTEGER DEFAULT 0,
         created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
+        updated_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
         UNIQUE(story_id, chapter_number)
       )
     `);
@@ -205,6 +206,19 @@ export async function initDb() {
       // Column already exists, ignore error
       if (!err.message.includes('already exists')) {
         console.error('Error adding volume_id column:', err.message);
+      }
+    }
+
+    // Migration: Add updated_at column to chapters table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE chapters ADD COLUMN updated_at BIGINT DEFAULT EXTRACT(epoch FROM NOW())
+      `);
+      console.log('✓ Added updated_at column to chapters table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding updated_at column:', err.message);
       }
     }
 

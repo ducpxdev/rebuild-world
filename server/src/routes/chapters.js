@@ -34,8 +34,9 @@ router.get('/:number', optionalAuth, async (req, res) => {
       WHERE c.chapter_id = $1 ORDER BY c.created_at ASC
     `, [chapter.id]);
     const comments = commentsResult.rows;
+    const commentCount = comments.length;
 
-    res.json({ ...chapter, prev: prev?.chapter_number ?? null, next: next?.chapter_number ?? null, comments });
+    res.json({ ...chapter, prev: prev?.chapter_number ?? null, next: next?.chapter_number ?? null, comments, commentCount });
   } catch (error) {
     console.error('Error fetching chapter:', error);
     res.status(500).json({ error: 'Failed to fetch chapter' });
@@ -228,7 +229,7 @@ router.put('/:number', authenticateToken, requireAdmin, uploadDb.any(), saveUplo
       console.log('[Chapter Update] Stripped external URLs from content');
     }
 
-    await pool.query('UPDATE chapters SET title = $1, content = $2, images = $3 WHERE id = $4',
+    await pool.query(`UPDATE chapters SET title = $1, content = $2, images = $3, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $4`,
       [title, finalContent || chapter.content, images, chapter.id]);
 
     res.json({ message: 'Chapter updated' });

@@ -3,13 +3,14 @@ import type { ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
-import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText } from 'lucide-react';
 
 interface Comment { id: string; content: string; username: string; avatar_url?: string; created_at: number; }
 interface ChapterData {
   id: string; story_id: string; chapter_number: number; title: string;
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
   prev: number | null; next: number | null; comments: Comment[];
+  commentCount?: number; created_at?: number; updated_at?: number;
 }
 // Parse markdown content and render with embedded images
 // IMPORTANT: Only renders database-backed images from /api/images/ endpoint
@@ -75,6 +76,34 @@ const renderMarkdownContent = (content: string): ReactNode => {
   }
 
   return parts;
+};
+
+// Helper to format time elapsed since last edit
+const formatTimeElapsed = (timestamp: number | undefined): string => {
+  if (!timestamp) return 'Unknown';
+  const now = Math.floor(Date.now() / 1000);
+  const seconds = now - timestamp;
+  
+  if (seconds < 60) return 'Just now';
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  if (days < 30) return `${days}d ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months}mo ago`;
+  const years = Math.floor(months / 12);
+  return `${years}y ago`;
+};
+
+// Helper to calculate word count from content
+const calculateWordCount = (content: string | undefined): number => {
+  if (!content) return 0;
+  // Remove markdown image syntax and split by whitespace
+  const cleaned = content.replace(/!\[([^\]]*)\]\(\/api\/images\/[^)]+\)/g, '').trim();
+  if (!cleaned) return 0;
+  return cleaned.split(/\s+/).length;
 };
 
 export default function ChapterPage() {
@@ -148,20 +177,53 @@ export default function ChapterPage() {
             onContextMenu={e => e.preventDefault()}
             onDragStart={e => e.preventDefault()}
           >
-            <h1 className="text-2xl font-bold text-slate-100 mb-6 font-['Rajdhani'] tracking-wide">{chapter.title}</h1>
+            <h1 className="text-2xl font-bold text-slate-100 mb-2 font-['Rajdhani'] tracking-wide">{chapter.title}</h1>
+            <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mb-6 pb-4 border-b border-slate-700/50">
+              <div className="flex items-center gap-1">
+                <MessageCircle className="w-4 h-4" />
+                <span>{chapter.commentCount ?? comments.length} {(chapter.commentCount ?? comments.length) === 1 ? 'comment' : 'comments'}</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <FileText className="w-4 h-4" />
+                <span>{calculateWordCount(chapter.content).toLocaleString()} words</span>
+              </div>
+              {chapter.updated_at && (
+                <div className="flex items-center gap-1">
+                  <Clock className="w-4 h-4" />
+                  <span>Edited {formatTimeElapsed(chapter.updated_at)}</span>
+                </div>
+              )}
+            </div>
             <div className="space-y-4 text-slate-300 leading-relaxed">
               {chapter.content && renderMarkdownContent(chapter.content)}
             </div>
           </article>
         ) : (
-          <div
-            className="space-y-2"
-            onContextMenu={e => e.preventDefault()}
-            onDragStart={e => e.preventDefault()}
-          >
-            {images.map((src, i) => (
-              <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-lg border border-slate-800/40 pointer-events-none" loading="lazy" draggable={false} />
-            ))}
+          <div className="space-y-4">
+            <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+              <h1 className="text-2xl font-bold text-slate-100 mb-2 font-['Rajdhani'] tracking-wide">{chapter.title}</h1>
+              <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500">
+                <div className="flex items-center gap-1">
+                  <MessageCircle className="w-4 h-4" />
+                  <span>{chapter.commentCount ?? comments.length} {(chapter.commentCount ?? comments.length) === 1 ? 'comment' : 'comments'}</span>
+                </div>
+                {chapter.updated_at && (
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-4 h-4" />
+                    <span>Edited {formatTimeElapsed(chapter.updated_at)}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div
+              className="space-y-2"
+              onContextMenu={e => e.preventDefault()}
+              onDragStart={e => e.preventDefault()}
+            >
+              {images.map((src, i) => (
+                <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-lg border border-slate-800/40 pointer-events-none" loading="lazy" draggable={false} />
+              ))}
+            </div>
           </div>
         )}
 
