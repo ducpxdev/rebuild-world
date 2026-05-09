@@ -952,7 +952,7 @@ export default function StoryPage() {
                                         ...prev,
                                         [vol.id]: { ...prev[vol.id], title: e.target.value }
                                       }))}
-                                      placeholder={`e.g., Chapter ${volChapters.length + 1}: Title`}
+                                      placeholder="Enter chapter title (required)"
                                       disabled={chapterLoading[vol.id]}
                                       className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
                                     />

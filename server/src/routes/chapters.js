@@ -110,12 +110,13 @@ router.post('/', authenticateToken, upload.any(), async (req, res) => {
       console.log('[Chapter Create] Replaced image URLs in content');
     }
 
-    // Validation
+    // Validation - title is always required
+    if (!title || !title.trim()) {
+      console.log('[Chapter Create] Missing title');
+      return res.status(400).json({ error: 'Chapter title is required' });
+    }
+
     if (story.type === 'text') {
-      if (!title && !finalContent) {
-        console.log('[Chapter Create] Text chapter without title or content');
-        return res.status(400).json({ error: 'Title and content are required' });
-      }
       if (!finalContent) {
         console.log('[Chapter Create] Text chapter without content');
         return res.status(400).json({ error: 'Content is required for text chapters' });
@@ -123,10 +124,6 @@ router.post('/', authenticateToken, upload.any(), async (req, res) => {
     }
     
     if (story.type === 'comic') {
-      if (!title && !images) {
-        console.log('[Chapter Create] Comic chapter without title or images');
-        return res.status(400).json({ error: 'Title and images are required' });
-      }
       if (!images) {
         console.log('[Chapter Create] Comic chapter without images');
         return res.status(400).json({ error: 'At least one image is required for comic chapters' });
@@ -139,7 +136,7 @@ router.post('/', authenticateToken, upload.any(), async (req, res) => {
     await pool.query(`
       INSERT INTO chapters (id, story_id, volume_id, chapter_number, title, content, images)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
-    `, [id, story.id, volume_id || null, chapter_number, title || `Chapter ${chapter_number}`, finalContent || null, images]);
+    `, [id, story.id, volume_id || null, chapter_number, title.trim(), finalContent || null, images]);
 
     await pool.query("UPDATE stories SET updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $1", [story.id]);
 
@@ -177,8 +174,14 @@ router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req
 
     let { title, content } = req.body;
     
-    // Ensure title and content are strings
-    title = title ?? chapter.title;
+    // Title is always required for updates
+    if (!title || !title.toString().trim()) {
+      console.log('[Chapter Update] Missing title');
+      return res.status(400).json({ error: 'Chapter title is required' });
+    }
+    title = title.trim();
+    
+    // Content is optional (user might only update title)
     content = content ?? chapter.content;
     if (content) content = (content || '').trim();
 
@@ -211,7 +214,7 @@ router.put('/:number', authenticateToken, requireAdmin, upload.any(), async (req
     }
 
     await pool.query('UPDATE chapters SET title = $1, content = $2, images = $3 WHERE id = $4',
-      [title || chapter.title, finalContent || chapter.content, images, chapter.id]);
+      [title, finalContent || chapter.content, images, chapter.id]);
 
     res.json({ message: 'Chapter updated' });
   } catch (error) {
