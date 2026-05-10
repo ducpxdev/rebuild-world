@@ -27,19 +27,19 @@ router.get('/:number', optionalAuth, async (req, res) => {
     // Increment views
     await pool.query('UPDATE chapters SET views = views + 1 WHERE id = $1', [chapter.id]);
 
-    // Get previous chapter (with lower chapter_number)
+    // Get previous chapter (based on creation order)
     const prevResult = await pool.query(`
       SELECT chapter_number FROM chapters 
-      WHERE story_id = $1 AND chapter_number < $2 
-      ORDER BY chapter_number DESC LIMIT 1
-    `, [req.params.storyId, chapter.chapter_number]);
+      WHERE story_id = $1 AND created_at < $2 
+      ORDER BY created_at DESC LIMIT 1
+    `, [req.params.storyId, chapter.created_at]);
     
-    // Get next chapter (with higher chapter_number)
+    // Get next chapter (based on creation order)
     const nextResult = await pool.query(`
       SELECT chapter_number FROM chapters 
-      WHERE story_id = $1 AND chapter_number > $2 
-      ORDER BY chapter_number ASC LIMIT 1
-    `, [req.params.storyId, chapter.chapter_number]);
+      WHERE story_id = $1 AND created_at > $2 
+      ORDER BY created_at ASC LIMIT 1
+    `, [req.params.storyId, chapter.created_at]);
 
     // Fetch comments
     const commentsResult = await pool.query(`
