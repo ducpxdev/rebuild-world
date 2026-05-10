@@ -331,4 +331,42 @@ router.post('/:number/comments', authenticateToken, async (req, res) => {
   }
 });
 
+// DEBUG: GET all chapters for a story with their numbers
+// /api/stories/:storyId/chapters-debug
+router.get('/debug/all', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, chapter_number, title, volume_id, created_at
+      FROM chapters
+      WHERE story_id = $1
+      ORDER BY chapter_number ASC
+    `, [req.params.storyId]);
+    
+    res.json({
+      total: result.rows.length,
+      chapters: result.rows,
+      missing: detectMissingChapters(result.rows)
+    });
+  } catch (error) {
+    console.error('Error fetching debug info:', error);
+    res.status(500).json({ error: 'Failed to fetch debug info' });
+  }
+});
+
+// Helper to detect gaps in chapter numbering
+function detectMissingChapters(chapters) {
+  if (chapters.length === 0) return [];
+  
+  const missing = [];
+  const numbers = chapters.map(c => c.chapter_number).sort((a, b) => a - b);
+  
+  for (let i = numbers[0]; i <= numbers[numbers.length - 1]; i++) {
+    if (!numbers.includes(i)) {
+      missing.push(i);
+    }
+  }
+  
+  return missing;
+}
+
 export default router;
