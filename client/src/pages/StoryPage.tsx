@@ -420,21 +420,29 @@ export default function StoryPage() {
       const [removed] = reordered.splice(draggedIndex, 1);
       reordered.splice(targetIndex, 0, removed);
 
-      // Send reorder request to backend
+      // Send reorder request to backend with volumeId
       const result = await api.patch(`/stories/${id}/chapters/reorder`, {
-        chapterIds: reordered.map((ch) => ch.id)
+        chapterIds: reordered.map((ch) => ch.id),
+        volumeId: volumeId
       });
 
-      // Update local state
+      // Update local state with fresh data from backend
       if (story && result.data.chapters) {
-        const updated = result.data.chapters as Array<{ id: string; chapter_number: number }>;
+        const updated = result.data.chapters as Array<{ id: string; chapter_number: number; volume_id?: string }>;
+        
+        // Build new chapters array with updated numbers
+        const newChapters = story.chapters.map((ch) => {
+          const updatedCh = updated.find((u) => u.id === ch.id);
+          return updatedCh ? { ...ch, chapter_number: updatedCh.chapter_number } : ch;
+        }).sort((a, b) => a.chapter_number - b.chapter_number);
+        
         setStory({
           ...story,
-          chapters: story.chapters.map((ch) => {
-            const updated_ch = updated.find((u) => u.id === ch.id);
-            return updated_ch ? { ...ch, chapter_number: updated_ch.chapter_number } : ch;
-          }).sort((a, b) => a.chapter_number - b.chapter_number)
+          chapters: newChapters
         });
+        
+        // Force re-render by clearing expanded state and refreshing
+        setExpandedChapterLists(new Set(expandedChapterLists));
       }
     } catch (error) {
       console.error('Error reordering chapters:', error);

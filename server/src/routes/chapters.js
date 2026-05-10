@@ -370,34 +370,42 @@ function detectMissingChapters(chapters) {
 }
 
 // PATCH /api/stories/:storyId/chapters/reorder
-// Body: { chapterIds: [id1, id2, id3, ...] } - array of chapter IDs in desired order
+// Body: { chapterIds: [id1, id2, id3, ...], volumeId: 'vol-id' } - array of chapter IDs in desired order
 router.patch('/reorder', authenticateToken, requireAdmin, async (req, res) => {
   try {
-    const { chapterIds } = req.body;
+    const { chapterIds, volumeId } = req.body;
     
     if (!Array.isArray(chapterIds) || chapterIds.length === 0) {
       return res.status(400).json({ error: 'Invalid chapterIds array' });
     }
 
-    // Verify all chapters belong to this story
+    // Verify all chapters belong to this story and volume
     const chaptersResult = await pool.query(`
-      SELECT id, chapter_number FROM chapters 
-      WHERE story_id = $1 AND id = ANY($2)
-    `, [req.params.storyId, chapterIds]);
+      SELECT id, chapter_number, volume_id FROM chapters 
+      WHERE story_id = $1 AND id = ANY($2) AND volume_id = $3
+    `, [req.params.storyId, chapterIds, volumeId || null]);
 
     if (chaptersResult.rows.length !== chapterIds.length) {
-      return res.status(400).json({ error: 'Some chapters not found' });
+      return res.status(400).json({ error: 'Some chapters not found or do not belong to this volume' });
     }
 
-    // Update chapter_number based on new order
+    // Get the minimum chapter number in this volume to start numbering from
+    const minNumberResult = await pool.query(`
+      SELECT MIN(chapter_number) as min_num FROM chapters 
+      WHERE story_id = $1 AND volume_id = $2
+    `, [req.params.storyId, volumeId || null]);
+    
+    const startingNumber = minNumberResult.rows[0]?.min_num || 1;
+
+    // Update chapter_number based on new order within the volume
     // Use transaction to ensure atomicity
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
       
-      // Assign new chapter numbers starting from 1
+      // Assign new chapter numbers starting from the volume's base number
       for (let i = 0; i < chapterIds.length; i++) {
-        const newChapterNumber = i + 1;
+        const newChapterNumber = startingNumber + i;
         await client.query(
           'UPDATE chapters SET chapter_number = $1, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $2',
           [newChapterNumber, chapterIds[i]]
@@ -412,9 +420,9 @@ router.patch('/reorder', authenticateToken, requireAdmin, async (req, res) => {
       client.release();
     }
 
-    // Return updated chapters
+    // Return all chapters for this story sorted by number
     const updatedResult = await pool.query(`
-      SELECT id, chapter_number, title FROM chapters 
+      SELECT id, chapter_number, title, volume_id FROM chapters 
       WHERE story_id = $1 
       ORDER BY chapter_number ASC
     `, [req.params.storyId]);
