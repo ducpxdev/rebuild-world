@@ -51,7 +51,6 @@ const renderMarkdownContent = (content: string): ReactNode => {
             (e.target as HTMLImageElement).style.display = 'none';
           }}
         />
-        {alt && <p className="text-center text-sm text-slate-500 mt-2 italic">{alt}</p>}
       </div>
     );
 
