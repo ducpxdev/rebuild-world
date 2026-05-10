@@ -369,4 +369,61 @@ function detectMissingChapters(chapters) {
   return missing;
 }
 
+// PATCH /api/stories/:storyId/chapters/reorder
+// Body: { chapterIds: [id1, id2, id3, ...] } - array of chapter IDs in desired order
+router.patch('/reorder', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { chapterIds } = req.body;
+    
+    if (!Array.isArray(chapterIds) || chapterIds.length === 0) {
+      return res.status(400).json({ error: 'Invalid chapterIds array' });
+    }
+
+    // Verify all chapters belong to this story
+    const chaptersResult = await pool.query(`
+      SELECT id, chapter_number FROM chapters 
+      WHERE story_id = $1 AND id = ANY($2)
+    `, [req.params.storyId, chapterIds]);
+
+    if (chaptersResult.rows.length !== chapterIds.length) {
+      return res.status(400).json({ error: 'Some chapters not found' });
+    }
+
+    // Update chapter_number based on new order
+    // Use transaction to ensure atomicity
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      
+      // Assign new chapter numbers starting from 1
+      for (let i = 0; i < chapterIds.length; i++) {
+        const newChapterNumber = i + 1;
+        await client.query(
+          'UPDATE chapters SET chapter_number = $1, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $2',
+          [newChapterNumber, chapterIds[i]]
+        );
+      }
+      
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
+
+    // Return updated chapters
+    const updatedResult = await pool.query(`
+      SELECT id, chapter_number, title FROM chapters 
+      WHERE story_id = $1 
+      ORDER BY chapter_number ASC
+    `, [req.params.storyId]);
+
+    res.json({ message: 'Chapters reordered successfully', chapters: updatedResult.rows });
+  } catch (error) {
+    console.error('Error reordering chapters:', error);
+    res.status(500).json({ error: 'Failed to reorder chapters' });
+  }
+});
+
 export default router;

@@ -84,6 +84,12 @@ export default function StoryPage() {
   const [commentLoading, setCommentLoading] = useState(false);
   const [commentError, setCommentError] = useState('');
 
+  // Drag-and-drop state
+  const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
+  const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
+  const [dragVolume, setDragVolume] = useState<string | null>(null);
+  const [reorderingLoading, setReorderingLoading] = useState(false);
+
   useEffect(() => {
     const loadStory = async () => {
       try {
@@ -361,6 +367,80 @@ export default function StoryPage() {
       setCommentError(errorMsg);
     } finally {
       setCommentLoading(false);
+    }
+  };
+
+  // Drag-and-drop handlers for chapter reordering
+  const handleChapterDragStart = (e: React.DragEvent, chapterId: string, volumeId: string) => {
+    setDraggedChapterId(chapterId);
+    setDragVolume(volumeId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleChapterDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleChapterDragEnter = (e: React.DragEvent, chapterId: string) => {
+    e.preventDefault();
+    setDraggedOverChapterId(chapterId);
+  };
+
+  const handleChapterDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    if (e.currentTarget === e.target) {
+      setDraggedOverChapterId(null);
+    }
+  };
+
+  const handleChapterDrop = async (e: React.DragEvent, targetChapterId: string, volumeId: string) => {
+    e.preventDefault();
+    setDraggedOverChapterId(null);
+
+    if (!draggedChapterId || draggedChapterId === targetChapterId || dragVolume !== volumeId || !user?.is_admin) {
+      return;
+    }
+
+    try {
+      setReorderingLoading(true);
+
+      // Get current chapters in this volume
+      const volChapters = story!.chapters.filter(ch => ch.volume_id === volumeId).sort((a, b) => a.chapter_number - b.chapter_number);
+      
+      const draggedIndex = volChapters.findIndex(ch => ch.id === draggedChapterId);
+      const targetIndex = volChapters.findIndex(ch => ch.id === targetChapterId);
+
+      if (draggedIndex === -1 || targetIndex === -1) {
+        return;
+      }
+
+      // Reorder array
+      const reordered = [...volChapters];
+      const [removed] = reordered.splice(draggedIndex, 1);
+      reordered.splice(targetIndex, 0, removed);
+
+      // Send reorder request to backend
+      const result = await api.patch(`/stories/${id}/chapters/reorder`, {
+        chapterIds: reordered.map((ch) => ch.id)
+      });
+
+      // Update local state
+      if (story && result.data.chapters) {
+        const updated = result.data.chapters as Array<{ id: string; chapter_number: number }>;
+        setStory({
+          ...story,
+          chapters: story.chapters.map((ch) => {
+            const updated_ch = updated.find((u) => u.id === ch.id);
+            return updated_ch ? { ...ch, chapter_number: updated_ch.chapter_number } : ch;
+          }).sort((a, b) => a.chapter_number - b.chapter_number)
+        });
+      }
+    } catch (error) {
+      console.error('Error reordering chapters:', error);
+    } finally {
+      setReorderingLoading(false);
+      setDraggedChapterId(null);
     }
   };
 
@@ -885,9 +965,55 @@ export default function StoryPage() {
                             {volChapters.slice(0, expandedChapterLists.has(vol.id) ? volChapters.length : 5).map(ch => {
                               // Check if chapter is new (created within last 7 days)
                               const isNew = (Date.now() / 1000 - ch.created_at) < 7 * 24 * 3600;
-                              return (
-                                <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
+                              const isDragging = draggedChapterId === ch.id;
+                              const isDraggedOver = draggedOverChapterId === ch.id;
+                              
+                              return user?.is_admin ? (
+                                <div
+                                  key={ch.id}
+                                  draggable
+                                  onDragStart={(e) => handleChapterDragStart(e, ch.id, vol.id)}
+                                  onDragOver={handleChapterDragOver}
+                                  onDragEnter={(e) => handleChapterDragEnter(e, ch.id)}
+                                  onDragLeave={handleChapterDragLeave}
+                                  onDrop={(e) => handleChapterDrop(e, ch.id, vol.id)}
+                                  className={`flex items-center justify-between px-6 py-3.5 transition group cursor-move ${
+                                    isDragging ? 'opacity-50 bg-cyan-500/10' : 
+                                    isDraggedOver ? 'bg-cyan-500/20 border-t-2 border-cyan-400' : 
+                                    'hover:bg-cyan-500/[0.03]'
+                                  }`}
+                                >
+                                  <Link
+                                    to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                                    onClick={(e) => reorderingLoading && e.preventDefault()}
+                                    className="flex items-center justify-between w-full"
+                                  >
+                                    <div className="flex items-center gap-3 min-w-0">
+                                      {isNew && (
+                                        <span className="text-xs font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
+                                          Mới
+                                        </span>
+                                      )}
+                                      <div className="min-w-0">
+                                        <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition block">
+                                          {ch.title}
+                                        </span>
+                                      </div>
+                                    </div>
+                                    <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0 ml-4">
+                                      <span className="min-w-[75px] text-right">
+                                        {new Date(ch.created_at * 1000).toLocaleDateString('vi-VN')}
+                                      </span>
+                                      <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
+                                    </div>
+                                  </Link>
+                                </div>
+                              ) : (
+                                <Link
+                                  key={ch.id}
+                                  to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+                                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group"
+                                >
                                   <div className="flex items-center gap-3 min-w-0">
                                     {isNew && (
                                       <span className="text-xs font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
