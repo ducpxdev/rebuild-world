@@ -87,7 +87,6 @@ export default function StoryPage() {
   // Drag-and-drop state
   const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
-  const [dragVolume, setDragVolume] = useState<string | null>(null);
   const [reorderingLoading, setReorderingLoading] = useState(false);
 
   useEffect(() => {
@@ -371,54 +370,74 @@ export default function StoryPage() {
   };
 
   // Drag-and-drop handlers for chapter reordering
-  const handleChapterDragStart = (e: React.DragEvent, chapterId: string, volumeId: string) => {
+  const handleChapterDragStart = (e: React.DragEvent, chapterId: string) => {
+    e.stopPropagation();
     setDraggedChapterId(chapterId);
-    setDragVolume(volumeId);
     e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/html', chapterId);
+    console.log('[Drag] Started dragging chapter:', chapterId);
   };
 
   const handleChapterDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     e.dataTransfer.dropEffect = 'move';
   };
 
   const handleChapterDragEnter = (e: React.DragEvent, chapterId: string) => {
     e.preventDefault();
-    setDraggedOverChapterId(chapterId);
+    e.stopPropagation();
+    if (draggedChapterId && draggedChapterId !== chapterId) {
+      setDraggedOverChapterId(chapterId);
+    }
   };
 
   const handleChapterDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
-    if (e.currentTarget === e.target) {
-      setDraggedOverChapterId(null);
-    }
+    e.stopPropagation();
+    setDraggedOverChapterId(null);
   };
 
   const handleChapterDrop = async (e: React.DragEvent, targetChapterId: string, volumeId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     setDraggedOverChapterId(null);
+    setDraggedChapterId(null);
 
-    if (!draggedChapterId || draggedChapterId === targetChapterId || dragVolume !== volumeId || !user?.is_admin) {
+    if (!draggedChapterId || draggedChapterId === targetChapterId || !user?.is_admin || !story) {
       return;
     }
 
     try {
       setReorderingLoading(true);
+      console.log('[Drag Drop] Reordering chapters', { draggedChapterId, targetChapterId, volumeId });
 
-      // Get current chapters in this volume
-      const volChapters = story!.chapters.filter(ch => ch.volume_id === volumeId).sort((a, b) => a.chapter_number - b.chapter_number);
+      // Get fresh chapters array from current story state
+      const allChapters = story.chapters;
       
+      // Filter to get chapters in this volume, sorted by chapter_number
+      const volChapters = allChapters
+        .filter(ch => ch.volume_id === volumeId)
+        .sort((a, b) => a.chapter_number - b.chapter_number);
+      
+      console.log('[Drag Drop] Volume chapters:', volChapters.map(c => ({ id: c.id, num: c.chapter_number, title: c.title })));
+
       const draggedIndex = volChapters.findIndex(ch => ch.id === draggedChapterId);
       const targetIndex = volChapters.findIndex(ch => ch.id === targetChapterId);
 
+      console.log('[Drag Drop] Indices', { draggedIndex, targetIndex });
+
       if (draggedIndex === -1 || targetIndex === -1) {
+        console.error('[Drag Drop] Chapter not found in volume', { draggedIndex, targetIndex });
         return;
       }
 
-      // Reorder array
+      // Reorder array: remove dragged item and insert before target
       const reordered = [...volChapters];
       const [removed] = reordered.splice(draggedIndex, 1);
       reordered.splice(targetIndex, 0, removed);
+
+      console.log('[Drag Drop] New order:', reordered.map(c => ({ id: c.id, num: c.chapter_number })));
 
       // Send reorder request to backend with volumeId
       const result = await api.patch(`/stories/${id}/chapters/reorder`, {
@@ -426,29 +445,41 @@ export default function StoryPage() {
         volumeId: volumeId
       });
 
+      console.log('[Drag Drop] API Response:', result.data);
+
       // Update local state with fresh data from backend
-      if (story && result.data.chapters) {
-        const updated = result.data.chapters as Array<{ id: string; chapter_number: number; volume_id?: string }>;
+      if (result.data.chapters && Array.isArray(result.data.chapters)) {
+        const updatedChapters = result.data.chapters as Array<{ id: string; chapter_number: number; volume_id?: string }>;
         
-        // Build new chapters array with updated numbers
-        const newChapters = story.chapters.map((ch) => {
-          const updatedCh = updated.find((u) => u.id === ch.id);
-          return updatedCh ? { ...ch, chapter_number: updatedCh.chapter_number } : ch;
-        }).sort((a, b) => a.chapter_number - b.chapter_number);
-        
+        // Map updated chapter numbers back to story chapters
+        const newChapters = allChapters.map((ch) => {
+          const updatedCh = updatedChapters.find((u) => u.id === ch.id);
+          if (updatedCh) {
+            return { ...ch, chapter_number: updatedCh.chapter_number };
+          }
+          return ch;
+        });
+
+        // Sort by chapter_number for display
+        newChapters.sort((a, b) => a.chapter_number - b.chapter_number);
+
+        console.log('[Drag Drop] Updated chapters:', newChapters.map(c => ({ id: c.id, num: c.chapter_number })));
+
+        // Update story state
         setStory({
           ...story,
           chapters: newChapters
         });
-        
-        // Force re-render by clearing expanded state and refreshing
+
+        // Force UI refresh
         setExpandedChapterLists(new Set(expandedChapterLists));
+      } else {
+        console.error('[Drag Drop] No chapters in response:', result.data);
       }
     } catch (error) {
-      console.error('Error reordering chapters:', error);
+      console.error('[Drag Drop] Error reordering chapters:', error);
     } finally {
       setReorderingLoading(false);
-      setDraggedChapterId(null);
     }
   };
 
@@ -980,7 +1011,7 @@ export default function StoryPage() {
                                 <div
                                   key={ch.id}
                                   draggable
-                                  onDragStart={(e) => handleChapterDragStart(e, ch.id, vol.id)}
+                                  onDragStart={(e) => handleChapterDragStart(e, ch.id)}
                                   onDragOver={handleChapterDragOver}
                                   onDragEnter={(e) => handleChapterDragEnter(e, ch.id)}
                                   onDragLeave={handleChapterDragLeave}
