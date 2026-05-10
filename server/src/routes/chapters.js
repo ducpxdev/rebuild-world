@@ -9,25 +9,39 @@ const router = Router({ mergeParams: true });
 // GET /api/stories/:storyId/chapters/:number
 router.get('/:number', optionalAuth, async (req, res) => {
   try {
+    const chapterNumber = parseInt(req.params.number, 10);
+    
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
     const chapterResult = await pool.query(`
       SELECT ch.*, s.type, s.author_id, s.title as story_title
       FROM chapters ch JOIN stories s ON ch.story_id = s.id
       WHERE ch.story_id = $1 AND ch.chapter_number = $2
-    `, [req.params.storyId, Number(req.params.number)]);
+    `, [req.params.storyId, chapterNumber]);
     const chapter = chapterResult.rows[0];
 
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
+    // Increment views
     await pool.query('UPDATE chapters SET views = views + 1 WHERE id = $1', [chapter.id]);
 
-    const prevResult = await pool.query('SELECT chapter_number FROM chapters WHERE story_id = $1 AND chapter_number < $2 ORDER BY chapter_number DESC LIMIT 1',
-      [req.params.storyId, chapter.chapter_number]);
-    const prev = prevResult.rows[0];
+    // Get previous chapter (with lower chapter_number)
+    const prevResult = await pool.query(`
+      SELECT chapter_number FROM chapters 
+      WHERE story_id = $1 AND chapter_number < $2 
+      ORDER BY chapter_number DESC LIMIT 1
+    `, [req.params.storyId, chapter.chapter_number]);
     
-    const nextResult = await pool.query('SELECT chapter_number FROM chapters WHERE story_id = $1 AND chapter_number > $2 ORDER BY chapter_number ASC LIMIT 1',
-      [req.params.storyId, chapter.chapter_number]);
-    const next = nextResult.rows[0];
+    // Get next chapter (with higher chapter_number)
+    const nextResult = await pool.query(`
+      SELECT chapter_number FROM chapters 
+      WHERE story_id = $1 AND chapter_number > $2 
+      ORDER BY chapter_number ASC LIMIT 1
+    `, [req.params.storyId, chapter.chapter_number]);
 
+    // Fetch comments
     const commentsResult = await pool.query(`
       SELECT c.*, u.username, u.avatar_url FROM comments c
       JOIN users u ON c.user_id = u.id
@@ -36,7 +50,19 @@ router.get('/:number', optionalAuth, async (req, res) => {
     const comments = commentsResult.rows;
     const commentCount = comments.length;
 
-    res.json({ ...chapter, prev: prev?.chapter_number ?? null, next: next?.chapter_number ?? null, comments, commentCount });
+    // Extract chapter numbers safely
+    const prevChapterNumber = prevResult.rows.length > 0 ? prevResult.rows[0].chapter_number : null;
+    const nextChapterNumber = nextResult.rows.length > 0 ? nextResult.rows[0].chapter_number : null;
+
+    console.log('[Chapter GET] Chapter:', chapter.chapter_number, 'Prev:', prevChapterNumber, 'Next:', nextChapterNumber);
+
+    res.json({ 
+      ...chapter, 
+      prev: prevChapterNumber, 
+      next: nextChapterNumber, 
+      comments, 
+      commentCount 
+    });
   } catch (error) {
     console.error('Error fetching chapter:', error);
     res.status(500).json({ error: 'Failed to fetch chapter' });
@@ -172,12 +198,18 @@ router.post('/', authenticateToken, uploadDb.any(), saveUploadedFiles, async (re
 // PUT /api/stories/:storyId/chapters/:number — admin only
 router.put('/:number', authenticateToken, requireAdmin, uploadDb.any(), saveUploadedFiles, async (req, res) => {
   try {
+    const chapterNumber = parseInt(req.params.number, 10);
+    
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
     if (!story) return res.status(403).json({ error: 'Forbidden' });
 
     const chapterResult = await pool.query('SELECT * FROM chapters WHERE story_id = $1 AND chapter_number = $2',
-      [story.id, Number(req.params.number)]);
+      [story.id, chapterNumber]);
     const chapter = chapterResult.rows[0];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
@@ -242,12 +274,18 @@ router.put('/:number', authenticateToken, requireAdmin, uploadDb.any(), saveUplo
 // DELETE /api/stories/:storyId/chapters/:number — admin only
 router.delete('/:number', authenticateToken, requireAdmin, async (req, res) => {
   try {
+    const chapterNumber = parseInt(req.params.number, 10);
+    
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
     const storyResult = await pool.query('SELECT * FROM stories WHERE id = $1', [req.params.storyId]);
     const story = storyResult.rows[0];
     if (!story) return res.status(403).json({ error: 'Forbidden' });
 
     const chapterResult = await pool.query('SELECT * FROM chapters WHERE story_id = $1 AND chapter_number = $2',
-      [story.id, Number(req.params.number)]);
+      [story.id, chapterNumber]);
     const chapter = chapterResult.rows[0];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
@@ -262,11 +300,17 @@ router.delete('/:number', authenticateToken, requireAdmin, async (req, res) => {
 // POST /api/stories/:storyId/chapters/:number/comments
 router.post('/:number/comments', authenticateToken, async (req, res) => {
   try {
+    const chapterNumber = parseInt(req.params.number, 10);
+    
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
 
     const chapterResult = await pool.query('SELECT id FROM chapters WHERE story_id = $1 AND chapter_number = $2',
-      [req.params.storyId, Number(req.params.number)]);
+      [req.params.storyId, chapterNumber]);
     const chapter = chapterResult.rows[0];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
