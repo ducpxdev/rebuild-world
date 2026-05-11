@@ -91,6 +91,13 @@ export default function StoryPage() {
   const [notesError, setNotesError] = useState('');
   const [notesSaved, setNotesSaved] = useState(false);
 
+  // Review state
+  const [reviews, setReviews] = useState<any[]>([]);
+  const [reviewText, setReviewText] = useState('');
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState('');
+  const [reviewSuccess, setReviewSuccess] = useState(false);
+
   // Drag-and-drop state
   const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
@@ -99,10 +106,11 @@ export default function StoryPage() {
   useEffect(() => {
     const loadStory = async () => {
       try {
-        const [storyRes, volumesRes, commentsRes] = await Promise.all([
+        const [storyRes, volumesRes, commentsRes, reviewsRes] = await Promise.all([
           api.get(`/stories/${id}`),
           api.get(`/stories/${id}/volumes`).catch(() => ({ data: { volumes: [] } })),
-          api.get(`/stories/${id}/comments`).catch(() => ({ data: { comments: [] } }))
+          api.get(`/stories/${id}/comments`).catch(() => ({ data: { comments: [] } })),
+          api.get(`/stories/${id}/reviews`).catch(() => ({ data: { reviews: [] } }))
         ]);
         setStory(storyRes.data);
         setNotesText(storyRes.data.additional_notes || '');
@@ -111,6 +119,7 @@ export default function StoryPage() {
         setBookmarkCount(storyRes.data.bookmark_count || 0);
         setVolumes(volumesRes.data.volumes || []);
         setComments(commentsRes.data.comments || []);
+        setReviews(reviewsRes.data.reviews || []);
         // Expand first volume by default
         if (volumesRes.data.volumes?.length > 0) {
           setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
@@ -148,6 +157,32 @@ export default function StoryPage() {
       setNotesError(errorMsg);
     } finally {
       setNotesLoading(false);
+    }
+  };
+
+  const submitReview = async () => {
+    if (reviewText.trim().length < 9) {
+      setReviewError('Review must be longer than 8 characters');
+      return;
+    }
+
+    setReviewLoading(true);
+    setReviewError('');
+    try {
+      await api.post(`/stories/${id}/rate`, { rating: userRating || 1, review_text: reviewText });
+      setReviewText('');
+      setReviewSuccess(true);
+      
+      // Refresh reviews
+      const reviewsRes = await api.get(`/stories/${id}/reviews`);
+      setReviews(reviewsRes.data.reviews || []);
+      
+      setTimeout(() => setReviewSuccess(false), 2000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to submit review';
+      setReviewError(errorMsg);
+    } finally {
+      setReviewLoading(false);
     }
   };
 
@@ -674,21 +709,105 @@ export default function StoryPage() {
                 </div>
               </div>
             )}
-          </div>
 
-          {/* Right sidebar */}
-          <div className="lg:w-72 shrink-0 space-y-6">
             {/* Rate this series */}
             {user && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
-                <h3 className="text-sm font-bold text-slate-300 mb-3 font-['Rajdhani'] tracking-wide uppercase">Rate this series</h3>
-                <div className="flex items-center gap-2">
-                  <StarRating rating={userRating} onRate={handleRate} interactive />
-                  {userRating > 0 && <span className="text-sm text-amber-400 font-bold">{userRating}/5</span>}
+              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+                <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-400" /> Rate this series
+                </h2>
+                
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Your rating</label>
+                    <div className="flex items-center gap-3">
+                      <StarRating rating={userRating} onRate={handleRate} interactive />
+                      {userRating > 0 && <span className="text-sm text-amber-400 font-bold">{userRating}/5</span>}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-slate-300 mb-2">Your review (optional)</label>
+                    {reviewSuccess && (
+                      <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
+                        ✓ Review submitted successfully!
+                      </div>
+                    )}
+                    {reviewError && (
+                      <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
+                        ✗ {reviewError}
+                      </div>
+                    )}
+                    <textarea
+                      value={reviewText}
+                      onChange={(e) => {
+                        setReviewText(e.target.value);
+                        setReviewError('');
+                      }}
+                      placeholder="Share your thoughts about this story (minimum 9 characters)..."
+                      disabled={reviewLoading}
+                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <div className="mt-2 flex items-center justify-between">
+                      <span className={`text-xs ${reviewText.trim().length < 9 ? 'text-slate-500' : 'text-emerald-400'}`}>
+                        {reviewText.trim().length}/9 characters
+                      </span>
+                      <button
+                        onClick={submitReview}
+                        disabled={reviewLoading || userRating === 0}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                          reviewText.trim().length < 9 || userRating === 0
+                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                            : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
+                        } disabled:opacity-50`}
+                      >
+                        {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
             )}
 
+            {/* User Reviews */}
+            {reviews.length > 0 && (
+              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+                <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">
+                  Reader Reviews ({reviews.length})
+                </h2>
+                <div className="space-y-4">
+                  {reviews.map((review, idx) => (
+                    <div key={idx} className="flex gap-3 pb-4 border-b border-slate-700/50 last:border-b-0 last:pb-0">
+                      <div className="flex-shrink-0">
+                        <div className="flex items-center gap-1">
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <Star key={star} className={`w-3.5 h-3.5 ${star <= review.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-700'}`} />
+                          ))}
+                        </div>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          {review.avatar_url ? (
+                            <img src={review.avatar_url} alt="" className="w-6 h-6 rounded object-cover" />
+                          ) : (
+                            <div className="w-6 h-6 rounded bg-slate-800 flex items-center justify-center">
+                              <User className="w-3 h-3 text-cyan-500/50" />
+                            </div>
+                          )}
+                          <span className="text-sm font-medium text-slate-300">{review.username}</span>
+                          <span className="text-xs text-slate-600">{timeSince(review.created_at)}</span>
+                        </div>
+                        <p className="text-sm text-slate-400 leading-relaxed">{review.review_text}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Right sidebar */}
+          <div className="lg:w-72 shrink-0 space-y-6">
             {/* Additional Notes */}
             <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
               <div className="flex items-center justify-between mb-4">

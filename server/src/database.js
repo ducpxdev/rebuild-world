@@ -235,6 +235,19 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add review_text column to story_ratings table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE story_ratings ADD COLUMN review_text TEXT DEFAULT ''
+      `);
+      console.log('✓ Added review_text column to story_ratings table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding review_text column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {

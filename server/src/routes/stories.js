@@ -198,9 +198,16 @@ router.delete('/:id', authenticateToken, requireAdmin, async (req, res) => {
 // POST /api/stories/:id/rate — any authenticated user
 router.post('/:id/rate', authenticateToken, async (req, res) => {
   try {
-    const { rating } = req.body;
+    const { rating, review_text } = req.body;
     if (!rating || rating < 1 || rating > 5 || !Number.isInteger(rating)) {
       return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
+    }
+
+    // If review_text is provided, validate it's longer than 8 characters
+    if (review_text !== undefined && review_text !== null && review_text !== '') {
+      if (review_text.trim().length < 9) {
+        return res.status(400).json({ error: 'Review must be longer than 8 characters' });
+      }
     }
 
     const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [req.params.id]);
@@ -212,11 +219,11 @@ router.post('/:id/rate', authenticateToken, async (req, res) => {
     const existing = existingResult.rows[0];
 
     if (existing) {
-      await pool.query('UPDATE story_ratings SET rating = $1 WHERE user_id = $2 AND story_id = $3',
-        [rating, req.user.id, story.id]);
+      await pool.query('UPDATE story_ratings SET rating = $1, review_text = $2 WHERE user_id = $3 AND story_id = $4',
+        [rating, review_text || '', req.user.id, story.id]);
     } else {
-      await pool.query('INSERT INTO story_ratings (user_id, story_id, rating) VALUES ($1, $2, $3)',
-        [req.user.id, story.id, rating]);
+      await pool.query('INSERT INTO story_ratings (user_id, story_id, rating, review_text) VALUES ($1, $2, $3, $4)',
+        [req.user.id, story.id, rating, review_text || '']);
     }
 
     // Recalculate average
@@ -308,6 +315,24 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error creating story comment:', error);
     res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
+
+// GET /api/stories/:id/reviews — get all reviews for a story
+router.get('/:id/reviews', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT sr.rating, sr.review_text, sr.created_at, u.username, u.avatar_url
+      FROM story_ratings sr
+      JOIN users u ON sr.user_id = u.id
+      WHERE sr.story_id = $1 AND sr.review_text != ''
+      ORDER BY sr.created_at DESC
+    `, [req.params.id]);
+
+    res.json({ reviews: result.rows });
+  } catch (error) {
+    console.error('Error fetching story reviews:', error);
+    res.status(500).json({ error: 'Failed to fetch reviews' });
   }
 });
 
