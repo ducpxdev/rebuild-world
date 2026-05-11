@@ -311,4 +311,34 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
   }
 });
 
+// PATCH /api/stories/:id/notes — update additional notes (author/admin only)
+router.patch('/:id/notes', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { additional_notes } = req.body;
+
+    // Verify story exists and user is author or admin
+    const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [id]);
+    const story = storyResult.rows[0];
+    
+    if (!story) {
+      return res.status(404).json({ error: 'Story not found' });
+    }
+
+    if (story.author_id !== req.user.id && !req.user.is_admin) {
+      return res.status(403).json({ error: 'Only the author or admin can update notes' });
+    }
+
+    await pool.query(
+      'UPDATE stories SET additional_notes = $1 WHERE id = $2',
+      [additional_notes || '', id]
+    );
+
+    res.json({ message: 'Notes updated', additional_notes: additional_notes || '' });
+  } catch (error) {
+    console.error('Error updating notes:', error);
+    res.status(500).json({ error: 'Failed to update notes' });
+  }
+});
+
 export default router;

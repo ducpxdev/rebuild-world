@@ -13,7 +13,7 @@ interface StoryDetail {
   bookmark_count: number; comment_count: number; bookmarked: boolean;
   author_name: string; author_avatar?: string; author_id: string;
   chapter_count: number; chapters: Chapter[]; created_at: number; updated_at: number;
-  total_word_count?: number;
+  total_word_count?: number; additional_notes?: string;
 }
 
 function StarRating({ rating, onRate, interactive = false, size = 'md' }: { rating: number; onRate?: (r: number) => void; interactive?: boolean; size?: 'sm' | 'md' }) {
@@ -84,6 +84,13 @@ export default function StoryPage() {
   const [commentLoading, setCommentLoading] = useState(false);
   const [commentError, setCommentError] = useState('');
 
+  // Additional notes state
+  const [editingNotes, setEditingNotes] = useState(false);
+  const [notesText, setNotesText] = useState('');
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [notesError, setNotesError] = useState('');
+  const [notesSaved, setNotesSaved] = useState(false);
+
   // Drag-and-drop state
   const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
@@ -98,6 +105,7 @@ export default function StoryPage() {
           api.get(`/stories/${id}/comments`).catch(() => ({ data: { comments: [] } }))
         ]);
         setStory(storyRes.data);
+        setNotesText(storyRes.data.additional_notes || '');
         setUserRating(storyRes.data.user_rating || 0);
         setBookmarked(storyRes.data.bookmarked || false);
         setBookmarkCount(storyRes.data.bookmark_count || 0);
@@ -124,6 +132,23 @@ export default function StoryPage() {
     const r = await api.post(`/stories/${id}/bookmark`);
     setBookmarked(r.data.bookmarked);
     setBookmarkCount(c => c + (r.data.bookmarked ? 1 : -1));
+  };
+
+  const saveNotes = async () => {
+    setNotesLoading(true);
+    setNotesError('');
+    try {
+      await api.patch(`/stories/${id}/notes`, { additional_notes: notesText });
+      setStory(s => s ? { ...s, additional_notes: notesText } : s);
+      setEditingNotes(false);
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
+    } catch (error: any) {
+      const errorMsg = error.response?.data?.error || error.message || 'Failed to save notes';
+      setNotesError(errorMsg);
+    } finally {
+      setNotesLoading(false);
+    }
   };
 
   const createVolume = async (e: React.FormEvent) => {
@@ -584,7 +609,7 @@ export default function StoryPage() {
       {/* Stats bar */}
       <div className="border-y border-slate-800/60 bg-[#0d0d18]/80 backdrop-blur-sm">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 sm:grid-cols-4 divide-x divide-slate-800/60">
+          <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-800/60">
             <div className="flex flex-col items-center py-4 gap-1">
               <div className="flex items-center gap-1.5">
                 <Heart className="w-4 h-4 text-pink-400" />
@@ -614,15 +639,13 @@ export default function StoryPage() {
               </div>
               <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Comments</span>
             </div>
-            {story.total_word_count !== undefined && (
-              <div className="flex flex-col items-center py-4 gap-1">
-                <div className="flex items-center gap-1.5">
-                  <BookOpen className="w-4 h-4 text-blue-400" />
-                  <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{(story.total_word_count || 0).toLocaleString()}</span>
-                </div>
-                <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Words</span>
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-blue-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{(story.total_word_count || 0).toLocaleString()}</span>
               </div>
-            )}
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Words</span>
+            </div>
           </div>
         </div>
       </div>
@@ -666,59 +689,67 @@ export default function StoryPage() {
               </div>
             )}
 
-            {/* Series info */}
+            {/* Additional Notes */}
             <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
-              <h3 className="text-sm font-bold text-slate-300 mb-4 font-['Rajdhani'] tracking-wide uppercase">Series Info</h3>
-              <dl className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Type</dt>
-                  <dd className="text-slate-300 font-medium capitalize">{story.type === 'comic' ? 'Comic / Manga' : 'Light Novel'}</dd>
-                </div>
-                {story.genre && (
-                  <div className="flex justify-between">
-                    <dt className="text-slate-500">Genre</dt>
-                    <dd className="text-slate-300 font-medium">{story.genre}</dd>
-                  </div>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-sm font-bold text-slate-300 font-['Rajdhani'] tracking-wide uppercase">Additional Notes</h3>
+                {user && (user.is_admin || story.author_id === user.id) && !editingNotes && (
+                  <button
+                    onClick={() => setEditingNotes(true)}
+                    className="text-xs px-2 py-1 rounded bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition flex items-center gap-1"
+                  >
+                    <Edit className="w-3 h-3" /> Edit
+                  </button>
                 )}
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Status</dt>
-                  <dd className={`font-medium capitalize ${story.status === 'completed' ? 'text-emerald-400' : story.status === 'hiatus' ? 'text-amber-400' : 'text-cyan-400'}`}>
-                    {story.status || 'ongoing'}
-                  </dd>
+              </div>
+              
+              {notesSaved && (
+                <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
+                  ✓ Notes saved successfully!
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Chapters</dt>
-                  <dd className="text-slate-300 font-medium">{story.chapter_count}</dd>
+              )}
+              {notesError && (
+                <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
+                  ✗ {notesError}
                 </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Views</dt>
-                  <dd className="text-slate-300 font-medium">{story.views.toLocaleString()}</dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Rating</dt>
-                  <dd className="text-amber-400 font-medium">{story.rating_avg ? `${story.rating_avg.toFixed(1)} / 5` : '—'}<span className="text-slate-600 text-xs ml-1">({story.rating_count})</span></dd>
-                </div>
-                <div className="flex justify-between">
-                  <dt className="text-slate-500">Created</dt>
-                  <dd className="text-slate-300 font-medium">{new Date(story.created_at * 1000).toLocaleDateString()}</dd>
-                </div>
-                {story.updated_at && (
-                  <div className="flex justify-between">
-                    <dt className="text-slate-500">Updated</dt>
-                    <dd className="text-slate-300 font-medium">{timeSince(story.updated_at)}</dd>
+              )}
+
+              {editingNotes ? (
+                <div className="space-y-3">
+                  <textarea
+                    value={notesText}
+                    onChange={(e) => setNotesText(e.target.value)}
+                    disabled={notesLoading}
+                    placeholder="Add additional notes about this story..."
+                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
+                  />
+                  <div className="flex gap-2 justify-end">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setEditingNotes(false);
+                        setNotesText(story.additional_notes || '');
+                      }}
+                      disabled={notesLoading}
+                      className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-slate-600 transition text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={saveNotes}
+                      disabled={notesLoading}
+                      className="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {notesLoading ? 'Saving...' : 'Save'}
+                    </button>
                   </div>
-                )}
-                <div className="flex justify-between border-t border-slate-700/50 pt-3 mt-3">
-                  <dt className="text-slate-500">Comments</dt>
-                  <dd className="text-emerald-400 font-medium">{story.comment_count}</dd>
                 </div>
-                {story.total_word_count !== undefined && (
-                  <div className="flex justify-between">
-                    <dt className="text-slate-500">Total Words</dt>
-                    <dd className="text-blue-400 font-medium">{(story.total_word_count || 0).toLocaleString()}</dd>
-                  </div>
-                )}
-              </dl>
+              ) : (
+                <p className={`text-sm whitespace-pre-wrap ${notesText ? 'text-slate-400' : 'text-slate-600 italic'}`}>
+                  {notesText || 'No additional notes yet.'}
+                </p>
+              )}
             </div>
 
             {/* Tags */}

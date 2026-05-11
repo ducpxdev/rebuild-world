@@ -222,6 +222,19 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add additional_notes column to stories table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE stories ADD COLUMN additional_notes TEXT DEFAULT ''
+      `);
+      console.log('✓ Added additional_notes column to stories table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding additional_notes column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
