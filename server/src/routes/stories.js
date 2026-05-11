@@ -322,7 +322,7 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
 router.get('/:id/reviews', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT sr.rating, sr.review_text, sr.created_at, u.username, u.avatar_url
+      SELECT sr.user_id, sr.rating, sr.review_text, sr.created_at, u.username, u.avatar_url
       FROM story_ratings sr
       JOIN users u ON sr.user_id = u.id
       WHERE sr.story_id = $1 AND sr.review_text != ''
@@ -333,6 +333,40 @@ router.get('/:id/reviews', async (req, res) => {
   } catch (error) {
     console.error('Error fetching story reviews:', error);
     res.status(500).json({ error: 'Failed to fetch reviews' });
+  }
+});
+
+// DELETE /api/stories/:id/ratings/:userId — admin only, delete a user's review
+router.delete('/:id/ratings/:userId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id, userId } = req.params;
+
+    // Verify story exists
+    const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [id]);
+    if (!storyResult.rows[0]) {
+      return res.status(404).json({ error: 'Story not found' });
+    }
+
+    // Delete the rating/review
+    const deleteResult = await pool.query(
+      'DELETE FROM story_ratings WHERE story_id = $1 AND user_id = $2 RETURNING *',
+      [id, userId]
+    );
+
+    if (deleteResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Review not found' });
+    }
+
+    // Recalculate average
+    const statsResult = await pool.query('SELECT AVG(rating) as avg, COUNT(*) as count FROM story_ratings WHERE story_id = $1', [id]);
+    const stats = statsResult.rows[0];
+    await pool.query('UPDATE stories SET rating_avg = $1, rating_count = $2 WHERE id = $3',
+      [stats.avg ? Math.round(stats.avg * 10) / 10 : 0, stats.count, id]);
+
+    res.json({ message: 'Review deleted successfully' });
+  } catch (error) {
+    console.error('Error deleting review:', error);
+    res.status(500).json({ error: 'Failed to delete review' });
   }
 });
 

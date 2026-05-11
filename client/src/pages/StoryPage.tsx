@@ -186,6 +186,25 @@ export default function StoryPage() {
     }
   };
 
+  const deleteReview = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this review?')) return;
+
+    try {
+      await api.delete(`/stories/${id}/ratings/${userId}`);
+      
+      // Refresh reviews and story data
+      const [reviewsRes, storyRes] = await Promise.all([
+        api.get(`/stories/${id}/reviews`),
+        api.get(`/stories/${id}`)
+      ]);
+      setReviews(reviewsRes.data.reviews || []);
+      setStory(storyRes.data);
+    } catch (error: any) {
+      console.error('Error deleting review:', error);
+      alert(error.response?.data?.error || 'Failed to delete review');
+    }
+  };
+
   const createVolume = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!volumeForm.title.trim()) return;
@@ -796,6 +815,15 @@ export default function StoryPage() {
                           )}
                           <span className="text-sm font-medium text-slate-300">{review.username}</span>
                           <span className="text-xs text-slate-600">{timeSince(review.created_at)}</span>
+                          {user?.is_admin && (
+                            <button
+                              onClick={() => deleteReview(review.user_id)}
+                              className="ml-auto text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition flex items-center gap-1"
+                              title="Delete review"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
+                          )}
                         </div>
                         <p className="text-sm text-slate-400 leading-relaxed">{review.review_text}</p>
                       </div>
