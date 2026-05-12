@@ -340,14 +340,38 @@ router.post('/:number/comments', authenticateToken, async (req, res) => {
     const { content } = req.body;
     if (!content?.trim()) return res.status(400).json({ error: 'Comment cannot be empty' });
 
-    const chapterResult = await pool.query('SELECT id FROM chapters WHERE story_id = $1 AND chapter_number = $2',
-      [req.params.storyId, chapterNumber]);
+    // Check if user is banned from commenting
+    const userResult = await pool.query('SELECT comments_banned FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows.length > 0 && userResult.rows[0].comments_banned) {
+      return res.status(403).json({ error: 'You have been banned from commenting and reviewing' });
+    }
+
+    const chapterResult = await pool.query(`
+      SELECT c.id, c.story_id, s.author_id, s.title as story_title
+      FROM chapters c 
+      JOIN stories s ON c.story_id = s.id
+      WHERE c.story_id = $1 AND c.chapter_number = $2
+    `, [req.params.storyId, chapterNumber]);
     const chapter = chapterResult.rows[0];
     if (!chapter) return res.status(404).json({ error: 'Chapter not found' });
 
     const id = uuidv4();
     await pool.query('INSERT INTO comments (id, chapter_id, user_id, content) VALUES ($1, $2, $3, $4)',
       [id, chapter.id, req.user.id, content.trim()]);
+
+    // Create notification for story author if commenter is not the author
+    if (req.user.id !== chapter.author_id) {
+      const notificationId = uuidv4();
+      const notificationTitle = `New comment on a chapter`;
+      const notificationMessage = `${req.user.username} commented on Chapter ${chapterNumber} of "${chapter.story_title}"`;
+      
+      await pool.query(
+        `INSERT INTO notifications 
+          (id, user_id, commenter_id, story_id, comment_id, comment_type, chapter_number, type, title, message, link, is_read, created_at) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 0, EXTRACT(epoch FROM NOW()))`,
+        [notificationId, chapter.author_id, req.user.id, chapter.story_id, id, 'chapter', chapterNumber, 'comment', notificationTitle, notificationMessage, `/story/${chapter.story_id}/chapter/${chapterNumber}#comment-${id}`]
+      );
+    }
 
     const commentResult = await pool.query(`
       SELECT c.*, u.username, u.avatar_url FROM comments c

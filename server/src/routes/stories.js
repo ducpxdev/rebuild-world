@@ -307,17 +307,32 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
       return res.status(403).json({ error: 'You have been banned from commenting and reviewing' });
     }
 
-    // Verify story exists
-    const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [id]);
+    // Verify story exists and get author
+    const storyResult = await pool.query('SELECT id, author_id FROM stories WHERE id = $1', [id]);
     if (storyResult.rows.length === 0) {
       return res.status(404).json({ error: 'Story not found' });
     }
+    const story = storyResult.rows[0];
 
     const commentId = uuidv4();
     await pool.query(
       'INSERT INTO story_comments (id, story_id, user_id, content) VALUES ($1, $2, $3, $4)',
       [commentId, id, req.user.id, content.trim()]
     );
+
+    // Create notification for story author if commenter is not the author
+    if (req.user.id !== story.author_id) {
+      const notificationId = uuidv4();
+      const notificationTitle = `New comment on your story`;
+      const notificationMessage = `${req.user.username} commented on "${req.body.storyTitle || 'your story'}"`;
+      
+      await pool.query(
+        `INSERT INTO notifications 
+          (id, user_id, commenter_id, story_id, comment_id, comment_type, type, title, message, link, is_read, created_at) 
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, 0, EXTRACT(epoch FROM NOW()))`,
+        [notificationId, story.author_id, req.user.id, id, commentId, 'series', 'comment', notificationTitle, notificationMessage, `/story/${id}#comment-${commentId}`]
+      );
+    }
 
     const commentResult = await pool.query(`
       SELECT sc.*, u.username, u.avatar_url, u.is_admin
@@ -455,6 +470,79 @@ router.patch('/:id/notes', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error updating notes:', error);
     res.status(500).json({ error: 'Failed to update notes' });
+  }
+});
+
+// GET /api/notifications — get notifications for current user
+router.get('/notifications', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT n.*, 
+        c.username as commenter_username, 
+        c.avatar_url as commenter_avatar,
+        s.title as story_title
+      FROM notifications n
+      LEFT JOIN users c ON n.commenter_id = c.id
+      LEFT JOIN stories s ON n.story_id = s.id
+      WHERE n.user_id = $1
+      ORDER BY n.created_at DESC
+      LIMIT 50
+    `, [req.user.id]);
+
+    res.json(result.rows);
+  } catch (error) {
+    console.error('Error fetching notifications:', error);
+    res.status(500).json({ error: 'Failed to fetch notifications' });
+  }
+});
+
+// GET /api/notifications/unread-count — get unread notification count
+router.get('/notifications/unread-count', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(
+      'SELECT COUNT(*) as count FROM notifications WHERE user_id = $1 AND is_read = 0',
+      [req.user.id]
+    );
+    res.json({ unread_count: result.rows[0].count });
+  } catch (error) {
+    console.error('Error fetching unread count:', error);
+    res.status(500).json({ error: 'Failed to fetch unread count' });
+  }
+});
+
+// PUT /api/notifications/:id/read — mark notification as read
+router.put('/notifications/:id/read', authenticateToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Verify notification belongs to user
+    const notifResult = await pool.query(
+      'SELECT user_id FROM notifications WHERE id = $1',
+      [id]
+    );
+    if (notifResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Notification not found' });
+    }
+    if (notifResult.rows[0].user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Unauthorized' });
+    }
+
+    await pool.query('UPDATE notifications SET is_read = 1 WHERE id = $1', [id]);
+    res.json({ success: true, message: 'Notification marked as read' });
+  } catch (error) {
+    console.error('Error marking notification as read:', error);
+    res.status(500).json({ error: 'Failed to mark notification as read' });
+  }
+});
+
+// PUT /api/notifications/read-all — mark all notifications as read
+router.put('/notifications/read-all', authenticateToken, async (req, res) => {
+  try {
+    await pool.query('UPDATE notifications SET is_read = 1 WHERE user_id = $1', [req.user.id]);
+    res.json({ success: true, message: 'All notifications marked as read' });
+  } catch (error) {
+    console.error('Error marking all notifications as read:', error);
+    res.status(500).json({ error: 'Failed to mark all notifications as read' });
   }
 });
 

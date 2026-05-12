@@ -13,13 +13,20 @@ export default function Navbar() {
 
   useEffect(() => {
     if (user) {
-      api.get('/users/me/notifications').then(r => setUnreadCount(r.data.unread_count)).catch(() => {});
-      const interval = setInterval(() => {
-        api.get('/users/me/notifications').then(r => setUnreadCount(r.data.unread_count)).catch(() => {});
-      }, 30000);
+      fetchUnreadCount();
+      const interval = setInterval(fetchUnreadCount, 30000);
       return () => clearInterval(interval);
     }
   }, [user]);
+
+  const fetchUnreadCount = async () => {
+    try {
+      const response = await api.get('/notifications/unread-count');
+      setUnreadCount(response.data.unread_count || 0);
+    } catch (error) {
+      console.error('Error fetching unread count:', error);
+    }
+  };
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,10 +82,10 @@ export default function Navbar() {
                     </Link>
                   </>
                 )}
-                <Link to="/notifications" className="relative px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 transition rounded-lg hover:bg-cyan-500/5">
+                <Link to="/notifications" className="relative px-3 py-2 text-sm text-slate-400 hover:text-cyan-400 transition rounded-lg hover:bg-cyan-500/5 flex items-center gap-1.5" title="Notifications">
                   <Bell className="w-4 h-4" />
                   {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 -right-0.5 w-4 h-4 bg-cyan-500 text-black text-[10px] font-bold rounded-full flex items-center justify-center shadow-[0_0_8px_rgba(0,212,255,0.5)]">
+                    <span className="inline-flex items-center justify-center w-4 h-4 bg-cyan-500 text-black text-[10px] font-bold rounded-full shadow-[0_0_8px_rgba(0,212,255,0.5)]">
                       {unreadCount > 9 ? '9+' : unreadCount}
                     </span>
                   )}

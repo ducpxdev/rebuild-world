@@ -313,6 +313,66 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add commenter_id column to notifications table for comment notifications
+    try {
+      await pool.query(`
+        ALTER TABLE notifications ADD COLUMN commenter_id TEXT REFERENCES users(id) ON DELETE CASCADE
+      `);
+      console.log('✓ Added commenter_id column to notifications table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding commenter_id column:', err.message);
+      }
+    }
+
+    // Migration: Add story_id column to notifications table
+    try {
+      await pool.query(`
+        ALTER TABLE notifications ADD COLUMN story_id TEXT REFERENCES stories(id) ON DELETE CASCADE
+      `);
+      console.log('✓ Added story_id column to notifications table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding story_id column:', err.message);
+      }
+    }
+
+    // Migration: Add comment_id column to notifications table
+    try {
+      await pool.query(`
+        ALTER TABLE notifications ADD COLUMN comment_id TEXT
+      `);
+      console.log('✓ Added comment_id column to notifications table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding comment_id column:', err.message);
+      }
+    }
+
+    // Migration: Add comment_type column to notifications table ('series' or 'chapter')
+    try {
+      await pool.query(`
+        ALTER TABLE notifications ADD COLUMN comment_type TEXT CHECK(comment_type IN ('series', 'chapter'))
+      `);
+      console.log('✓ Added comment_type column to notifications table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding comment_type column:', err.message);
+      }
+    }
+
+    // Migration: Add chapter_number column to notifications table (for chapter comments)
+    try {
+      await pool.query(`
+        ALTER TABLE notifications ADD COLUMN chapter_number INTEGER
+      `);
+      console.log('✓ Added chapter_number column to notifications table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding chapter_number column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
