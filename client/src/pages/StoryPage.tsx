@@ -49,6 +49,7 @@ export default function StoryPage() {
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
+  const [expandedVolumeDescriptions, setExpandedVolumeDescriptions] = useState<Set<string>>(new Set());
   const [expandedChapterLists, setExpandedChapterLists] = useState<Set<string>>(new Set());
   const [expandedChapterForms, setExpandedChapterForms] = useState<Set<string>>(new Set());
   const [userRating, setUserRating] = useState(0);
@@ -1046,15 +1047,12 @@ export default function StoryPage() {
                         className="flex-1 flex items-center gap-4 text-left"
                       >
                         {vol.cover_url && (
-                          <img src={vol.cover_url} alt="" className="w-16 h-24 rounded-lg object-cover border border-slate-700/50 shrink-0" />
+                          <img src={vol.cover_url} alt="" className="w-32 h-48 rounded-lg object-cover border border-slate-700/50 shrink-0" />
                         )}
                         <div className="min-w-0 flex-1">
                           <span className="text-lg font-bold text-slate-300 group-hover:text-cyan-400 transition block">
                             {vol.title || `Volume ${vol.volume_number}`}
                           </span>
-                          {vol.description && (
-                            <span className="text-sm text-slate-500 line-clamp-2 block mt-1">{vol.description}</span>
-                          )}
                         </div>
                       </button>
                       
@@ -1073,6 +1071,38 @@ export default function StoryPage() {
                     {/* Expanded volume content */}
                     {expandedVolumes.has(vol.id) && (
                       <div className="bg-slate-900/20 divide-y divide-slate-800/20">
+                        {/* Collapsible Description Section */}
+                        {vol.description && (
+                          <div>
+                            <button
+                              onClick={() => {
+                                const newExpanded = new Set(expandedVolumeDescriptions);
+                                if (newExpanded.has(vol.id)) {
+                                  newExpanded.delete(vol.id);
+                                } else {
+                                  newExpanded.add(vol.id);
+                                }
+                                setExpandedVolumeDescriptions(newExpanded);
+                              }}
+                              className="w-full px-6 py-4 flex items-center justify-between hover:bg-cyan-500/[0.03] transition group"
+                            >
+                              <span className="text-sm font-medium text-slate-400 group-hover:text-cyan-400 transition">
+                                Volume Description
+                              </span>
+                              {expandedVolumeDescriptions.has(vol.id) ? (
+                                <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
+                              ) : (
+                                <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
+                              )}
+                            </button>
+                            {expandedVolumeDescriptions.has(vol.id) && (
+                              <div className="px-6 py-4 bg-slate-800/20 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                                {vol.description}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
                         {/* Edit volume form - shown when editing */}
                         {editingVolumeId === vol.id && (
                           <div className="p-6 space-y-4 bg-slate-800/30 border-b border-slate-800/40">
