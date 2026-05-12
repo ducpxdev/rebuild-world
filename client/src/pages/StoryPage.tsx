@@ -105,10 +105,6 @@ export default function StoryPage() {
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
   const [reorderingLoading, setReorderingLoading] = useState(false);
 
-  // Reading progress state
-  const [lastReadChapter, setLastReadChapter] = useState<{ id: string; number: number } | null>(null);
-  const [readingProgress, setReadingProgress] = useState(0);
-
   useEffect(() => {
     const loadStory = async () => {
       try {
@@ -126,13 +122,6 @@ export default function StoryPage() {
         setVolumes(volumesRes.data.volumes || []);
         setComments(commentsRes.data.comments || []);
         setReviews(reviewsRes.data.reviews || []);
-        // Load reading progress
-        const progressData = localStorage.getItem(`reading_${id}`);
-        if (progressData) {
-          const { lastChapterId, lastChapterNumber, totalChapters } = JSON.parse(progressData);
-          setLastReadChapter({ id: lastChapterId, number: lastChapterNumber });
-          setReadingProgress(Math.round((lastChapterNumber / totalChapters) * 100));
-        }
         // Expand first volume by default
         if (volumesRes.data.volumes?.length > 0) {
           setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
@@ -645,23 +634,21 @@ export default function StoryPage() {
                 </div>
               </Link>
 
-              {/* Author and Illustrator Info - Enhanced Card */}
+              {/* Author and Illustrator Info */}
               {(story.work_author_name || story.illustrator_name) && (
-                <div className="bg-slate-800/30 rounded-lg border border-slate-700/50 p-4 mb-5 backdrop-blur-sm">
-                  <div className="flex flex-col gap-2.5">
-                    {story.work_author_name && (
-                      <div className="flex items-start gap-3">
-                        <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold whitespace-nowrap pt-0.5">Author:</span>
-                        <span className="text-slate-300 font-medium">{story.work_author_name}</span>
-                      </div>
-                    )}
-                    {story.illustrator_name && (
-                      <div className="flex items-start gap-3">
-                        <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold whitespace-nowrap pt-0.5">Illustrator:</span>
-                        <span className="text-slate-300 font-medium">{story.illustrator_name}</span>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex flex-col gap-2 mb-5">
+                  {story.work_author_name && (
+                    <div className="text-sm">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Author: </span>
+                      <span className="text-slate-300">{story.work_author_name}</span>
+                    </div>
+                  )}
+                  {story.illustrator_name && (
+                    <div className="text-sm">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Illustrator: </span>
+                      <span className="text-slate-300">{story.illustrator_name}</span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -680,12 +667,8 @@ export default function StoryPage() {
               {/* Action buttons */}
               <div className="flex items-center gap-3 flex-wrap">
                 {story.chapters.length > 0 && (
-                  <Link to={lastReadChapter ? `/story/${story.id}/chapter/${lastReadChapter.number}` : `/story/${story.id}/chapter/1`} className="group flex items-center gap-2 px-7 py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 transition font-['Rajdhani'] tracking-wide uppercase text-sm relative overflow-hidden" title={lastReadChapter ? `Continue from chapter ${lastReadChapter.number}` : 'Start reading from the beginning'}>
-                    <span className="absolute inset-0 bg-cyan-400/20 blur-lg opacity-0 group-hover:opacity-100 transition duration-300"></span>
-                    <span className="relative flex items-center gap-2">
-                      <BookOpen className="w-4 h-4 group-hover:scale-110 transition" />
-                      {lastReadChapter ? (`Continue Reading (${readingProgress}%)`) : 'Start Reading'}
-                    </span>
+                  <Link to={`/story/${story.id}/chapter/1`} className="flex items-center gap-2 px-7 py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 transition shadow-[0_0_25px_rgba(0,212,255,0.25)] font-['Rajdhani'] tracking-wide uppercase text-sm">
+                    <BookOpen className="w-4 h-4" /> Start Reading
                   </Link>
                 )}
                 {user && (
@@ -707,67 +690,45 @@ export default function StoryPage() {
         </div>
       </div>
 
-      {/* Stats bar - Card-based layout */}
-      <div className="bg-gradient-to-b from-slate-900/50 to-slate-900/20 border-y border-slate-800/60 backdrop-blur-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-            {/* Favorites Card */}
-            <div className="group bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-pink-500/30 rounded-lg p-4 transition cursor-help" title="Total number of users who bookmarked this series">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <Heart className="w-5 h-5 text-pink-400 group-hover:scale-110 transition" />
-                  <span className="text-xl font-bold text-slate-100 font-['Rajdhani']">{bookmarkCount.toLocaleString()}</span>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Favorites</span>
+      {/* Stats bar */}
+      <div className="border-y border-slate-800/60 bg-[#0d0d18]/80 backdrop-blur-sm">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-800/60">
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <Heart className="w-4 h-4 text-pink-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{bookmarkCount.toLocaleString()}</span>
               </div>
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Favorites</span>
             </div>
-
-            {/* Rating Card - More Prominent */}
-            <div className="group md:col-span-1 lg:col-span-2 bg-gradient-to-br from-amber-500/10 via-slate-800/40 to-slate-800/40 hover:from-amber-500/20 hover:via-slate-800/60 to-slate-800/60 border border-amber-500/30 hover:border-amber-500/50 rounded-lg p-4 transition cursor-help" title="Average rating from all user reviews">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="flex gap-0.5">
-                    {[1, 2, 3, 4, 5].map(i => (
-                      <Star key={i} className={`w-5 h-5 ${i <= Math.round(story.rating_avg || 0) ? 'text-amber-400 fill-amber-400' : 'text-slate-600'} group-hover:scale-110 transition`} />
-                    ))}
-                  </div>
-                  <span className="text-2xl font-bold text-amber-400 font-['Rajdhani'] group-hover:text-amber-300 transition">{story.rating_avg ? story.rating_avg.toFixed(1) : '—'}</span>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Rating ({story.rating_count} votes)</span>
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.rating_avg ? story.rating_avg.toFixed(2) : '—'}</span>
+                <span className="text-xs text-slate-600">/ {story.rating_count}</span>
               </div>
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Rating</span>
             </div>
-
-            {/* Views Card */}
-            <div className="group bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-cyan-500/30 rounded-lg p-4 transition cursor-help" title="Total number of story views">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <Eye className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition" />
-                  <span className="text-xl font-bold text-slate-100 font-['Rajdhani']">{story.views.toLocaleString()}</span>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Views</span>
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <Eye className="w-4 h-4 text-cyan-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.views.toLocaleString()}</span>
               </div>
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Views</span>
             </div>
-
-            {/* Comments Card */}
-            <div className="group bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-emerald-500/30 rounded-lg p-4 transition cursor-help" title="Total number of user comments">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <MessageCircle className="w-5 h-5 text-emerald-400 group-hover:scale-110 transition" />
-                  <span className="text-xl font-bold text-slate-100 font-['Rajdhani']">{story.comment_count}</span>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Comments</span>
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <MessageCircle className="w-4 h-4 text-emerald-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.comment_count}</span>
               </div>
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Comments</span>
             </div>
-
-            {/* Words Card */}
-            <div className="group bg-slate-800/40 hover:bg-slate-800/60 border border-slate-700/50 hover:border-blue-500/30 rounded-lg p-4 transition cursor-help" title="Total word count across all chapters">
-              <div className="flex flex-col items-center gap-2">
-                <div className="flex items-center gap-1.5">
-                  <BookOpen className="w-5 h-5 text-blue-400 group-hover:scale-110 transition" />
-                  <span className="text-xl font-bold text-slate-100 font-['Rajdhani']">{((story.total_word_count || 0) / 1000).toFixed(1)}K</span>
-                </div>
-                <span className="text-xs text-slate-500 uppercase tracking-wider font-semibold">Words</span>
+            <div className="flex flex-col items-center py-4 gap-1">
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="w-4 h-4 text-blue-400" />
+                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{(story.total_word_count || 0).toLocaleString()}</span>
               </div>
+              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Words</span>
             </div>
           </div>
         </div>
