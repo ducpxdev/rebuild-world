@@ -4,17 +4,23 @@ import api from '../lib/api';
 import { Upload, X, Trash2 } from 'lucide-react';
 
 const GENRES = ['Fantasy', 'Sci-Fi', 'Romance', 'Horror', 'Adventure', 'Mystery', 'Comedy', 'Drama', 'Slice of Life', 'Action'];
+const TAG_CATEGORIES = {
+  light_novel: { label: 'Light Novel', color: 'red' },
+  web_novel: { label: 'Web Novel', color: 'yellow' },
+  manga: { label: 'Manga', color: 'orange' },
+};
 
 export default function EditStoryPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
+  const [type, setType] = useState<'text' | 'comic'>('text');
   const [genres, setGenres] = useState<string[]>([]);
   const [workAuthorName, setWorkAuthorName] = useState('');
   const [illustratorName, setIllustratorName] = useState('');
   const [translatorName, setTranslatorName] = useState('');
-  const [tags, setTags] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [status, setStatus] = useState('ongoing');
   const [isPublished, setIsPublished] = useState(true);
   const [existingCover, setExistingCover] = useState('');
@@ -31,11 +37,12 @@ export default function EditStoryPage() {
       const s = r.data;
       setTitle(s.title);
       setDescription(s.description || '');
+      setType(s.type || 'text');
       setGenres((s.genre || '').split(',').map((g: string) => g.trim()).filter(Boolean));
       setWorkAuthorName(s.work_author_name || '');
       setIllustratorName(s.illustrator_name || '');
       setTranslatorName(s.translator_name || '');
-      setTags(s.tags || '');
+      setSelectedTags((s.tags || '').split(',').map((t: string) => t.trim()).filter(Boolean));
       setStatus(s.status || 'ongoing');
       setIsPublished(!!s.is_published);
       setExistingCover(s.cover_url || '');
@@ -64,7 +71,7 @@ export default function EditStoryPage() {
     formData.append('work_author_name', workAuthorName);
     formData.append('illustrator_name', illustratorName);
     formData.append('translator_name', translatorName);
-    formData.append('tags', tags);
+    formData.append('tags', selectedTags.join(', '));
     formData.append('status', status);
     formData.append('is_published', isPublished ? '1' : '0');
     if (cover) formData.append('cover', cover);
@@ -185,9 +192,60 @@ export default function EditStoryPage() {
 
         {/* Tags */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-1">Tags</label>
-          <input type="text" value={tags} onChange={e => setTags(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Comma-separated tags" />
+          <label className="block text-sm font-medium text-slate-400 mb-3">Categories</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {type === 'text' ? (
+              <>
+                {['light_novel', 'web_novel'].map(tagKey => {
+                  const tag = TAG_CATEGORIES[tagKey as keyof typeof TAG_CATEGORIES];
+                  const colorMap = {
+                    red: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400' },
+                    yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400' },
+                    orange: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400' },
+                  };
+                  const colors = colorMap[tag.color as keyof typeof colorMap];
+                  return (
+                    <label key={tagKey} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${selectedTags.includes(tagKey) ? `${colors.bg} ${colors.border} ${colors.text}` : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                      <input type="checkbox" checked={selectedTags.includes(tagKey)} onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedTags([...selectedTags, tagKey]);
+                        } else {
+                          setSelectedTags(selectedTags.filter(t => t !== tagKey));
+                        }
+                      }}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-900" />
+                      <span className="text-sm font-medium">{tag.label}</span>
+                    </label>
+                  );
+                })}
+              </>
+            ) : (
+              <>
+                {['manga'].map(tagKey => {
+                  const tag = TAG_CATEGORIES[tagKey as keyof typeof TAG_CATEGORIES];
+                  const colorMap = {
+                    red: { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400' },
+                    yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/30', text: 'text-yellow-400' },
+                    orange: { bg: 'bg-amber-500/10', border: 'border-amber-500/30', text: 'text-amber-400' },
+                  };
+                  const colors = colorMap[tag.color as keyof typeof colorMap];
+                  return (
+                    <label key={tagKey} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition ${selectedTags.includes(tagKey) ? `${colors.bg} ${colors.border} ${colors.text}` : 'border-slate-700 text-slate-400 hover:border-slate-600'}`}>
+                      <input type="checkbox" checked={selectedTags.includes(tagKey)} onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedTags([...selectedTags, tagKey]);
+                        } else {
+                          setSelectedTags(selectedTags.filter(t => t !== tagKey));
+                        }
+                      }}
+                        className="w-4 h-4 rounded border-slate-600 bg-slate-900" />
+                      <span className="text-sm font-medium">{tag.label}</span>
+                    </label>
+                  );
+                })}
+              </>
+            )}
+          </div>
         </div>
 
         {/* Status */}

@@ -4,6 +4,25 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit } from 'lucide-react';
 
+const TAG_CATEGORIES = {
+  light_novel: { label: 'Light Novel', color: 'red' },
+  web_novel: { label: 'Web Novel', color: 'yellow' },
+  manga: { label: 'Manga', color: 'orange' },
+};
+
+const getTagColor = (tag: string) => {
+  const normalized = tag.trim().toLowerCase().replace(/\s+/g, '_');
+  const tagInfo = TAG_CATEGORIES[normalized as keyof typeof TAG_CATEGORIES];
+  if (!tagInfo) return { bg: 'bg-slate-800/80', border: 'border-slate-700/50', text: 'text-slate-400' };
+  
+  const colorMap = {
+    red: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
+    yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400' },
+    orange: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
+  };
+  return colorMap[tagInfo.color as keyof typeof colorMap];
+};
+
 interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
 interface Volume { id: string; volume_number: number; title: string; cover_url?: string; description?: string; chapter_count?: number; }
 interface StoryDetail {
@@ -693,9 +712,12 @@ export default function StoryPage() {
 
               {/* Genre tags row - below metadata */}
               <div className="flex items-center gap-2 flex-wrap mb-5">
-                {tags.map(t => (
-                  <span key={t} className="px-2.5 py-1 bg-slate-800/80 text-slate-400 text-xs rounded border border-slate-700/50">#{t}</span>
-                ))}
+                {tags.map(t => {
+                  const colors = getTagColor(t);
+                  return (
+                    <span key={t} className={`px-2.5 py-1 ${colors.bg} ${colors.text} text-xs rounded border ${colors.border}`}>{t}</span>
+                  );
+                })}
                 {story.status && (
                   <span className={`px-3 py-1 rounded text-xs font-semibold ml-auto ${story.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : story.status === 'hiatus' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
                   {story.status === 'ongoing' ? '● Ongoing' : story.status === 'completed' ? '✓ Completed' : '⏸ Hiatus'}
@@ -1087,11 +1109,14 @@ export default function StoryPage() {
             {/* Tags */}
             {tags.length > 0 && (
               <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
-                <h3 className="text-sm font-bold text-slate-300 mb-3 font-['Rajdhani'] tracking-wide uppercase">Tags</h3>
+                <h3 className="text-sm font-bold text-slate-300 mb-3 font-['Rajdhani'] tracking-wide uppercase">Categories</h3>
                 <div className="flex flex-wrap gap-1.5">
-                  {tags.map(t => (
-                    <span key={t} className="px-2.5 py-1 bg-cyan-500/5 text-cyan-400/70 text-xs rounded border border-cyan-500/10">#{t}</span>
-                  ))}
+                  {tags.map(t => {
+                    const colors = getTagColor(t);
+                    return (
+                      <span key={t} className={`px-2.5 py-1 ${colors.bg} ${colors.text} text-xs rounded border ${colors.border}`}>{t}</span>
+                    );
+                  })}
                 </div>
               </div>
             )}
