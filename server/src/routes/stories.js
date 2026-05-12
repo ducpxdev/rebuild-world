@@ -123,7 +123,7 @@ router.get('/:id', optionalAuth, async (req, res) => {
 // POST /api/stories — admin only
 router.post('/', authenticateToken, requireAdmin, uploadDb.single('cover'), saveUploadedFiles, async (req, res) => {
   try {
-    const { title, description, type, genre, tags, status } = req.body;
+    const { title, description, type, genre, illustrator_name, translator_name, tags, status } = req.body;
     if (!title || !type) return res.status(400).json({ error: 'Title and type are required' });
     if (!['text', 'comic'].includes(type)) return res.status(400).json({ error: 'Type must be text or comic' });
 
@@ -131,9 +131,9 @@ router.post('/', authenticateToken, requireAdmin, uploadDb.single('cover'), save
     const cover_url = req.file ? req.file.url : null;
 
     await pool.query(`
-      INSERT INTO stories (id, author_id, title, description, cover_url, type, genre, tags, status)
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-    `, [id, req.user.id, title, description || null, cover_url, type, genre || null, tags || null, status || 'ongoing']);
+      INSERT INTO stories (id, author_id, title, description, cover_url, type, genre, illustrator_name, translator_name, tags, status)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+    `, [id, req.user.id, title, description || null, cover_url, type, genre || null, illustrator_name || null, translator_name || null, tags || null, status || 'ongoing']);
 
     // Notify followers
     const followersResult = await pool.query('SELECT follower_id FROM followers WHERE followed_id = $1', [req.user.id]);
@@ -156,17 +156,19 @@ router.put('/:id', authenticateToken, requireAdmin, uploadDb.single('cover'), sa
     const story = storyResult.rows[0];
     if (!story) return res.status(404).json({ error: 'Story not found' });
 
-    const { title, description, genre, tags, status, is_published } = req.body;
+    const { title, description, genre, illustrator_name, translator_name, tags, status, is_published } = req.body;
     const cover_url = req.file ? req.file.url : story.cover_url;
 
     await pool.query(`
-      UPDATE stories SET title = $1, description = $2, cover_url = $3, genre = $4, tags = $5,
-      status = $6, is_published = $7, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $8
+      UPDATE stories SET title = $1, description = $2, cover_url = $3, genre = $4, illustrator_name = $5,
+      translator_name = $6, tags = $7, status = $8, is_published = $9, updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $10
     `, [
       title ?? story.title,
       description ?? story.description,
       cover_url,
       genre ?? story.genre,
+      illustrator_name ?? story.illustrator_name,
+      translator_name ?? story.translator_name,
       tags ?? story.tags,
       status ?? story.status,
       is_published !== undefined ? Number(is_published) : story.is_published,

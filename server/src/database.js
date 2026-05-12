@@ -248,6 +248,32 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add illustrator_name column to stories table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE stories ADD COLUMN illustrator_name TEXT DEFAULT ''
+      `);
+      console.log('✓ Added illustrator_name column to stories table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding illustrator_name column:', err.message);
+      }
+    }
+
+    // Migration: Add translator_name column to stories table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE stories ADD COLUMN translator_name TEXT DEFAULT ''
+      `);
+      console.log('✓ Added translator_name column to stories table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding translator_name column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {

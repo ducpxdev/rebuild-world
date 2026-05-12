@@ -11,6 +11,8 @@ export default function CreateStoryPage() {
   const [description, setDescription] = useState('');
   const [type, setType] = useState<'text' | 'comic'>('text');
   const [genre, setGenre] = useState('');
+  const [illustratorName, setIllustratorName] = useState('');
+  const [translatorName, setTranslatorName] = useState('');
   const [tags, setTags] = useState('');
   const [cover, setCover] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState('');
@@ -36,6 +38,8 @@ export default function CreateStoryPage() {
     formData.append('description', description);
     formData.append('type', type);
     formData.append('genre', genre);
+    formData.append('illustrator_name', illustratorName);
+    formData.append('translator_name', translatorName);
     formData.append('tags', tags);
     if (cover) formData.append('cover', cover);
 
@@ -122,6 +126,20 @@ export default function CreateStoryPage() {
             <option value="">Select genre</option>
             {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
+        </div>
+
+        {/* Illustrator Name */}
+        <div>
+          <label className="block text-sm font-medium text-slate-400 mb-1">Illustrator Name</label>
+          <input type="text" value={illustratorName} onChange={e => setIllustratorName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Name of the illustrator (optional)" />
+        </div>
+
+        {/* Translator Name */}
+        <div>
+          <label className="block text-sm font-medium text-slate-400 mb-1">Translator Name</label>
+          <input type="text" value={translatorName} onChange={e => setTranslatorName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Name of the translator (optional)" />
         </div>
 
         {/* Tags */}

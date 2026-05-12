@@ -11,6 +11,8 @@ export default function EditStoryPage() {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [genre, setGenre] = useState('');
+  const [illustratorName, setIllustratorName] = useState('');
+  const [translatorName, setTranslatorName] = useState('');
   const [tags, setTags] = useState('');
   const [status, setStatus] = useState('ongoing');
   const [isPublished, setIsPublished] = useState(true);
@@ -29,6 +31,8 @@ export default function EditStoryPage() {
       setTitle(s.title);
       setDescription(s.description || '');
       setGenre(s.genre || '');
+      setIllustratorName(s.illustrator_name || '');
+      setTranslatorName(s.translator_name || '');
       setTags(s.tags || '');
       setStatus(s.status || 'ongoing');
       setIsPublished(!!s.is_published);
@@ -55,6 +59,8 @@ export default function EditStoryPage() {
     formData.append('title', title);
     formData.append('description', description);
     formData.append('genre', genre);
+    formData.append('illustrator_name', illustratorName);
+    formData.append('translator_name', translatorName);
     formData.append('tags', tags);
     formData.append('status', status);
     formData.append('is_published', isPublished ? '1' : '0');
@@ -141,6 +147,20 @@ export default function EditStoryPage() {
             <option value="">Select genre</option>
             {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
           </select>
+        </div>
+
+        {/* Illustrator Name */}
+        <div>
+          <label className="block text-sm font-medium text-slate-400 mb-1">Illustrator Name</label>
+          <input type="text" value={illustratorName} onChange={e => setIllustratorName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Name of the illustrator (optional)" />
+        </div>
+
+        {/* Translator Name */}
+        <div>
+          <label className="block text-sm font-medium text-slate-400 mb-1">Translator Name</label>
+          <input type="text" value={translatorName} onChange={e => setTranslatorName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Name of the translator (optional)" />
         </div>
 
         {/* Tags */}
