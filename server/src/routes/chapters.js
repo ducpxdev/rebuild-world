@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken, optionalAuth, requireAdmin } from '../middleware/auth.js';
 import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
+import { sendChapterUpdateEmail } from '../mailer.js';
 
 const router = Router({ mergeParams: true });
 
@@ -174,6 +175,36 @@ router.post('/', authenticateToken, uploadDb.any(), saveUploadedFiles, async (re
     `, [id, story.id, volume_id || null, chapter_number, title.trim(), finalContent || null, images]);
 
     await pool.query("UPDATE stories SET updated_at = EXTRACT(EPOCH FROM NOW()) WHERE id = $1", [story.id]);
+
+    // Notify users who bookmarked this story
+    try {
+      const bookmarksResult = await pool.query(
+        'SELECT DISTINCT b.user_id, u.email FROM bookmarks b JOIN users u ON b.user_id = u.id WHERE b.story_id = $1',
+        [story.id]
+      );
+      
+      for (const bookmark of bookmarksResult.rows) {
+        // Create in-app notification
+        await pool.query(
+          'INSERT INTO notifications (id, user_id, type, title, message, link) VALUES ($1, $2, $3, $4, $5, $6)',
+          [uuidv4(), bookmark.user_id, 'new_chapter', `New chapter in "${story.title}"`, 
+            `The series '${story.title}' has been updated with chapter '${title.trim()}'`, `/story/${story.id}`]
+        );
+        
+        // Send email notification (with error handling)
+        try {
+          await sendChapterUpdateEmail(bookmark.email, story.title, title.trim(), story.id);
+        } catch (emailError) {
+          console.error('[Chapter Create] Failed to send email to', bookmark.email, ':', emailError.message);
+          // Continue with other notifications even if email fails
+        }
+      }
+      
+      console.log('[Chapter Create] Notifications sent to', bookmarksResult.rows.length, 'users');
+    } catch (notificationError) {
+      console.error('[Chapter Create] Error sending notifications:', notificationError);
+      // Don't fail the chapter creation if notifications fail
+    }
 
     console.log('[Chapter Create] Success:', id);
     res.status(201).json({ id, chapter_number, message: 'Chapter created' });

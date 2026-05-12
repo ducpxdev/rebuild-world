@@ -55,3 +55,30 @@ export async function sendPasswordResetEmail(to, token) {
     `,
   });
 }
+
+export async function sendChapterUpdateEmail(to, storyTitle, chapterTitle, storyId) {
+  const url = `${process.env.CLIENT_URL}/story/${storyId}`;
+  await transporter.sendMail({
+    from: process.env.EMAIL_FROM,
+    to,
+    subject: `New chapter in "${storyTitle}"`,
+    html: `
+      <div style="font-family:sans-serif;max-width:500px;margin:auto">
+        <h2 style="color:#7c3aed">New Chapter Available!</h2>
+        <p>A new chapter has been published in a story you're following:</p>
+        <div style="background:#f3f4f6;padding:16px;border-radius:8px;margin:16px 0">
+          <p style="margin:0;font-weight:bold;color:#1f2937">${storyTitle}</p>
+          <p style="margin:8px 0 0 0;color:#6b7280">Chapter: ${chapterTitle}</p>
+        </div>
+        <a href="${url}"
+           style="display:inline-block;padding:12px 24px;background:#7c3aed;color:#fff;
+                  text-decoration:none;border-radius:8px;font-weight:bold">
+          Read Now
+        </a>
+        <p style="color:#6b7280;font-size:12px;margin-top:24px">
+          You received this email because you bookmarked this story.
+        </p>
+      </div>
+    `,
+  });
+}
