@@ -7,6 +7,7 @@ import { fileURLToPath } from 'url';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabaseInfo, initDb, pool } from './database.js';
+import { apiLimiter } from './middleware/rateLimit.js';
 
 import authRoutes from './routes/auth.js';
 import storyRoutes from './routes/stories.js';
@@ -32,6 +33,9 @@ app.use(cors({
   credentials: true,
 }));
 app.use(express.json({ limit: '10mb' }));
+
+// Apply rate limiting to all API routes
+app.use('/api/', apiLimiter);
 
 // Serve static files from uploads directory with proper headers
 app.use('/uploads', (req, res, next) => {

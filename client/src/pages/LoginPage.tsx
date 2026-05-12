@@ -1,30 +1,61 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Crosshair, Mail, Lock, AlertCircle } from 'lucide-react';
+import { Crosshair, Mail, Lock, AlertCircle, Clock } from 'lucide-react';
+import { rateLimiting, isRateLimitError, getRetryAfter, formatRetryTime } from '../lib/rateLimit';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [isRateLimited, setIsRateLimited] = useState(false);
+  const [retryAfter, setRetryAfter] = useState<number | null>(null);
   const { login } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
+    setIsRateLimited(false);
+    setRetryAfter(null);
+
+    // Check frontend rate limiting
+    const rateLimitCheck = rateLimiting.login.isAllowed();
+    if (!rateLimitCheck.allowed) {
+      setError(rateLimitCheck.error || 'Too many login attempts. Please try again later.');
+      setIsRateLimited(true);
+      setRetryAfter(rateLimitCheck.retryAfter ? Math.ceil(rateLimitCheck.retryAfter / 1000) : null);
+      return;
+    }
+
     setLoading(true);
     try {
       await login(email, password);
+      // Success - reset rate limiter
+      rateLimiting.login.reset();
       navigate('/');
     } catch (err) {
-      const error = err as { response?: { data?: { error: string } } };
-      setError(error.response?.data?.error || 'Login failed');
+      rateLimiting.login.recordAttempt();
+
+      // Check if it's a rate limit error from backend
+      if (isRateLimitError(err)) {
+        const retrySeconds = getRetryAfter(err);
+        setIsRateLimited(true);
+        setRetryAfter(retrySeconds);
+        const errorMsg = (err as any).response?.data?.error || `Too many login attempts. Please try again in ${formatRetryTime(retrySeconds || 60)}.`;
+        setError(errorMsg);
+      } else {
+        const error = err as { response?: { data?: { error: string } } };
+        setError(error.response?.data?.error || 'Login failed');
+      }
     } finally {
       setLoading(false);
     }
   };
+
+  const remaining = rateLimiting.login.getRemaining();
+  const remainingTime = rateLimiting.login.getRemainingTime();
 
   return (
     <div className="min-h-screen flex bg-[#0a0a12]">
@@ -38,8 +69,24 @@ export default function LoginPage() {
           <p className="text-slate-500 mb-8">Sign in to continue your journey</p>
 
           {error && (
-            <div className="flex items-center gap-2 bg-red-500/10 text-red-400 border border-red-500/20 p-3 rounded-lg mb-6 text-sm">
-              <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+            <div className={`flex items-center gap-2 p-3 rounded-lg mb-6 text-sm border ${
+              isRateLimited 
+                ? 'bg-amber-500/10 text-amber-400 border-amber-500/20' 
+                : 'bg-red-500/10 text-red-400 border-red-500/20'
+            }`}>
+              {isRateLimited ? (
+                <Clock className="w-4 h-4 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 shrink-0" />
+              )}
+              {error}
+            </div>
+          )}
+
+          {!isRateLimited && remaining < 5 && (
+            <div className="flex items-center gap-2 bg-amber-500/10 text-amber-400 border border-amber-500/20 p-3 rounded-lg mb-6 text-sm">
+              <Clock className="w-4 h-4 shrink-0" /> 
+              {remaining} login attempt{remaining !== 1 ? 's' : ''} remaining before temporary lockout
             </div>
           )}
 
@@ -48,16 +95,16 @@ export default function LoginPage() {
               <label className="block text-sm font-medium text-slate-400 mb-1">Email</label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600" />
-                <input type="email" required value={email} onChange={e => setEmail(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition text-slate-200 placeholder-slate-600" placeholder="you@example.com" />
+                <input type="email" required value={email} onChange={e => setEmail(e.target.value)} disabled={isRateLimited}
+                  className="w-full pl-11 pr-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition text-slate-200 placeholder-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="you@example.com" />
               </div>
             </div>
             <div>
               <label className="block text-sm font-medium text-slate-400 mb-1">Password</label>
               <div className="relative">
                 <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-600" />
-                <input type="password" required value={password} onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition text-slate-200 placeholder-slate-600" placeholder="••••••••" />
+                <input type="password" required value={password} onChange={e => setPassword(e.target.value)} disabled={isRateLimited}
+                  className="w-full pl-11 pr-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none transition text-slate-200 placeholder-slate-600 disabled:opacity-50 disabled:cursor-not-allowed" placeholder="••••••••" />
               </div>
             </div>
 
@@ -65,10 +112,16 @@ export default function LoginPage() {
               <Link to="/forgot-password" className="text-sm text-cyan-400/70 hover:text-cyan-400">Forgot password?</Link>
             </div>
 
-            <button type="submit" disabled={loading}
-              className="w-full py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 disabled:opacity-50 transition shadow-[0_0_20px_rgba(0,212,255,0.2)] font-['Rajdhani'] text-lg tracking-wide uppercase">
-              {loading ? 'Signing in...' : 'Sign In'}
+            <button type="submit" disabled={loading || isRateLimited}
+              className="w-full py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-[0_0_20px_rgba(0,212,255,0.2)] font-['Rajdhani'] text-lg tracking-wide uppercase">
+              {loading ? 'Signing in...' : isRateLimited ? `Try again in ${remainingTime}s` : 'Sign In'}
             </button>
+
+            {isRateLimited && retryAfter && (
+              <p className="text-center text-xs text-slate-500">
+                Access will be restored in {formatRetryTime(retryAfter)}
+              </p>
+            )}
           </form>
 
           <p className="text-center text-sm text-slate-500 mt-8">

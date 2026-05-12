@@ -51,6 +51,7 @@ api.interceptors.request.use((config) => {
  * Response interceptor
  * - Handles authentication errors
  * - Prevents accidental token exposure
+ * - Handles rate limit errors
  */
 api.interceptors.response.use(
   (res) => {
@@ -62,6 +63,15 @@ api.interceptors.response.use(
     return res;
   },
   (err) => {
+    // Handle rate limit errors (429)
+    if (err.response?.status === 429) {
+      secureLog.warn('Rate limit exceeded', {
+        retryAfter: err.response?.data?.retryAfter
+      });
+      // Don't redirect - let the component handle it
+      return Promise.reject(err);
+    }
+
     // Handle authentication errors
     if (err.response?.status === 401 || err.response?.status === 403) {
       const isAuthRoute = err.config?.url?.startsWith('/auth/');

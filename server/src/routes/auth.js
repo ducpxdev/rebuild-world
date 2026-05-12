@@ -5,11 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../mailer.js';
 import { authenticateToken } from '../middleware/auth.js';
+import { loginLimiter, registerLimiter, passwordResetLimiter, verifyEmailLimiter } from '../middleware/rateLimit.js';
 
 const router = Router();
 
 // POST /api/auth/register
-router.post('/register', async (req, res) => {
+router.post('/register', registerLimiter, async (req, res) => {
   const { username, email, password } = req.body;
 
   if (!username || !email || !password) {
@@ -47,7 +48,7 @@ router.post('/register', async (req, res) => {
 });
 
 // POST /api/auth/login
-router.post('/login', async (req, res) => {
+router.post('/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   if (!email || !password) {
@@ -84,7 +85,7 @@ router.post('/login', async (req, res) => {
 });
 
 // GET /api/auth/verify-email?token=...
-router.get('/verify-email', async (req, res) => {
+router.get('/verify-email', verifyEmailLimiter, async (req, res) => {
   const { token } = req.query;
   if (!token) return res.status(400).json({ error: 'Token required' });
 
@@ -110,7 +111,7 @@ router.get('/verify-email', async (req, res) => {
 });
 
 // POST /api/auth/resend-verification
-router.post('/resend-verification', async (req, res) => {
+router.post('/resend-verification', verifyEmailLimiter, async (req, res) => {
   const { email } = req.body;
   
   try {
@@ -137,7 +138,7 @@ router.post('/resend-verification', async (req, res) => {
 });
 
 // POST /api/auth/forgot-password
-router.post('/forgot-password', async (req, res) => {
+router.post('/forgot-password', passwordResetLimiter, async (req, res) => {
   const { email } = req.body;
   
   try {
