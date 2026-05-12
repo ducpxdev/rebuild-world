@@ -386,6 +386,37 @@ router.post('/:number/comments', authenticateToken, async (req, res) => {
   }
 });
 
+// DELETE /api/stories/:storyId/chapters/:number/comments/:commentId — admin only
+router.delete('/:number/comments/:commentId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { number, commentId } = req.params;
+    const chapterNumber = parseInt(number, 10);
+
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
+    // Verify comment exists and belongs to this chapter
+    const commentResult = await pool.query(`
+      SELECT c.user_id, c.id 
+      FROM comments c
+      JOIN chapters ch ON c.chapter_id = ch.id
+      WHERE ch.story_id = $1 AND ch.chapter_number = $2 AND c.id = $3
+    `, [req.params.storyId, chapterNumber, commentId]);
+
+    if (commentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Delete the comment
+    await pool.query('DELETE FROM comments WHERE id = $1', [commentId]);
+    res.json({ success: true, message: 'Comment deleted' });
+  } catch (error) {
+    console.error('Error deleting chapter comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
 // DEBUG: GET all chapters for a story with their numbers
 // /api/stories/:storyId/chapters-debug
 router.get('/debug/all', async (req, res) => {

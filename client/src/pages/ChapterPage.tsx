@@ -3,9 +3,9 @@ import type { ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
-import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield } from 'lucide-react';
 
-interface Comment { id: string; content: string; username: string; avatar_url?: string; created_at: number; }
+interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; }
 interface ChapterData {
   id: string; story_id: string; chapter_number: number; title: string;
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
@@ -111,6 +111,8 @@ export default function ChapterPage() {
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
+  const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
+  const [banningUserId, setBanningUserId] = useState<string | null>(null);
 
   useEffect(() => {
     api.get(`/stories/${id}/chapters/${number}`).then(r => {
@@ -126,6 +128,32 @@ export default function ChapterPage() {
     const r = await api.post(`/stories/${id}/chapters/${number}/comments`, { content: comment });
     setComments(prev => [...prev, r.data]);
     setComment('');
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    try {
+      setDeletingCommentId(commentId);
+      await api.delete(`/stories/${id}/chapters/${number}/comments/${commentId}`);
+      setComments(comments.filter(c => c.id !== commentId));
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete comment');
+    } finally {
+      setDeletingCommentId(null);
+    }
+  };
+
+  const banUserFromComments = async (userId: string, username: string) => {
+    if (!window.confirm(`Ban ${username} from commenting and reviewing? This action cannot be undone.`)) return;
+    try {
+      setBanningUserId(userId);
+      await api.post(`/users/${userId}/ban-from-comments`, {});
+      alert(`${username} has been banned from commenting and reviewing`);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to ban user');
+    } finally {
+      setBanningUserId(null);
+    }
   };
 
   if (!chapter) return (
@@ -265,14 +293,36 @@ export default function ChapterPage() {
           ) : (
             <div className="space-y-4">
               {comments.map(c => (
-                <div key={c.id} className="flex gap-3">
+                <div key={c.id} className="group flex gap-3 rounded-lg p-3 hover:bg-slate-800/30 transition">
                   <div className="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center shrink-0">
                     {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-8 h-8 rounded-md object-cover" /> : <User className="w-4 h-4 text-cyan-500/50" />}
                   </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-sm font-medium text-slate-300">{c.username}</span>
-                      <span className="text-xs text-slate-600">{new Date(c.created_at * 1000).toLocaleDateString()}</span>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-slate-300">{c.username}</span>
+                        <span className="text-xs text-slate-600">{new Date(c.created_at * 1000).toLocaleDateString()}</span>
+                      </div>
+                      {user?.is_admin && (
+                        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition">
+                          <button
+                            onClick={() => deleteComment(c.id)}
+                            disabled={deletingCommentId === c.id}
+                            className="p-1.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded transition"
+                            title="Delete comment"
+                          >
+                            <X className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => banUserFromComments(c.user_id, c.username)}
+                            disabled={banningUserId === c.user_id}
+                            className="p-1.5 hover:bg-orange-500/20 text-slate-500 hover:text-orange-400 rounded transition"
+                            title="Ban from commenting"
+                          >
+                            <Shield className="w-4 h-4" />
+                          </button>
+                        </div>
+                      )}
                     </div>
                     <p className="text-sm text-slate-400 mt-1">{c.content}</p>
                   </div>
