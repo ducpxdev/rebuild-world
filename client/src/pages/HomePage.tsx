@@ -10,13 +10,44 @@ interface Story {
   rating_count?: number; chapter_count: number; status?: string;
 }
 
+interface StoryWithChapters extends Story {
+  chapters?: Array<{ id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string }>;
+}
+
 export default function HomePage() {
   const [featured, setFeatured] = useState<Story[]>([]);
-  const [latest, setLatest] = useState<Story[]>([]);
+  const [latest, setLatest] = useState<StoryWithChapters[]>([]);
 
   useEffect(() => {
-    api.get('/stories?sort=popular&page=1').then(r => setFeatured(r.data.stories?.slice(0, 6) ?? [])).catch(() => {});
-    api.get('/stories?sort=latest&page=1').then(r => setLatest(r.data.stories?.slice(0, 8) ?? [])).catch(() => {});
+    const loadStories = async () => {
+      try {
+        // Fetch featured stories
+        const featuredRes = await api.get('/stories?sort=popular&page=1');
+        setFeatured(featuredRes.data.stories?.slice(0, 6) ?? []);
+
+        // Fetch latest story summaries
+        const latestRes = await api.get('/stories?sort=latest&page=1');
+        const latestStories = latestRes.data.stories?.slice(0, 8) ?? [];
+
+        // Fetch detailed data (with chapters) for each latest story
+        const detailedStories = await Promise.all(
+          latestStories.map(async (story: Story) => {
+            try {
+              const detailRes = await api.get(`/stories/${story.id}`);
+              return detailRes.data;
+            } catch {
+              return story;
+            }
+          })
+        );
+
+        setLatest(detailedStories);
+      } catch (error) {
+        console.error('Error loading stories:', error);
+      }
+    };
+
+    loadStories();
   }, []);
 
   return (
@@ -57,7 +88,7 @@ export default function HomePage() {
               View all <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {featured.map(s => <StoryCard key={s.id} {...s} />)}
           </div>
         </section>
@@ -72,8 +103,19 @@ export default function HomePage() {
               View all <ArrowRight className="w-4 h-4" />
             </Link>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
-            {latest.map(s => <StoryCard key={s.id} {...s} />)}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+            {latest.map(s => {
+              const latestChapter = s.chapters && s.chapters.length > 0 ? s.chapters[s.chapters.length - 1] : null;
+              return (
+                <StoryCard
+                  key={s.id}
+                  {...s}
+                  isLatestMode={true}
+                  latestChapterNumber={latestChapter?.chapter_number}
+                  latestChapterTitle={latestChapter?.title}
+                />
+              );
+            })}
           </div>
         </section>
       )}

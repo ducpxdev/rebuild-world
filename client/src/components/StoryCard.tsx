@@ -13,11 +13,18 @@ interface StoryCardProps {
   rating_count?: number;
   chapter_count: number;
   status?: string;
+  isLatestMode?: boolean;
+  latestChapterNumber?: number;
+  latestChapterTitle?: string;
 }
 
-export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status }: StoryCardProps) {
+export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status, isLatestMode, latestChapterNumber, latestChapterTitle }: StoryCardProps) {
+  const linkTo = isLatestMode && latestChapterNumber !== undefined
+    ? `/story/${id}/chapter/${latestChapterNumber}`
+    : `/story/${id}`;
+
   return (
-    <Link to={`/story/${id}`} className="group block bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden hover:border-cyan-500/30 hover:-translate-y-1 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,212,255,0.08)]">
+    <Link to={linkTo} className="group block bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden hover:border-cyan-500/30 hover:-translate-y-1 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,212,255,0.08)]">
       {/* Cover */}
       <div className="relative aspect-[3/4] bg-gradient-to-br from-slate-900 to-slate-800 overflow-hidden">
         {cover_url ? (
@@ -47,6 +54,9 @@ export default function StoryCard({ id, title, cover_url, type, genre, author_na
       {/* Info */}
       <div className="p-3.5">
         <h3 className="font-semibold text-slate-200 line-clamp-2 group-hover:text-cyan-400 transition-colors text-sm">{title}</h3>
+        {isLatestMode && latestChapterTitle && (
+          <p className="text-xs text-cyan-400/80 mt-1 line-clamp-1 font-medium">Latest: {latestChapterTitle}</p>
+        )}
         <p className="text-xs text-slate-500 mt-1">by {author_name}</p>
         {genre && <span className="inline-block mt-2 px-2 py-0.5 bg-slate-800 text-slate-400 text-xs rounded">{genre}</span>}
         <div className="flex items-center gap-3 mt-3 text-xs text-slate-500">
