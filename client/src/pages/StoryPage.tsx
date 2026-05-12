@@ -4,7 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit } from 'lucide-react';
 import CommentInteractions from '../components/CommentInteractions';
-import LatestComments from '../components/LatestComments';
 
 const TAG_CATEGORIES = {
   light_novel: { label: 'Light Novel', color: 'red', badgeColor: 'bg-red-500' },
@@ -106,9 +105,6 @@ export default function StoryPage() {
   const [commentLoading, setCommentLoading] = useState(false);
   const [commentError, setCommentError] = useState('');
 
-  // Latest comments state
-  const [latestComments, setLatestComments] = useState<any[]>([]);
-
   // Additional notes state
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesText, setNotesText] = useState('');
@@ -138,12 +134,11 @@ export default function StoryPage() {
   useEffect(() => {
     const loadStory = async () => {
       try {
-        const [storyRes, volumesRes, commentsRes, reviewsRes, latestCommentsRes] = await Promise.all([
+        const [storyRes, volumesRes, commentsRes, reviewsRes] = await Promise.all([
           api.get(`/stories/${id}`),
           api.get(`/stories/${id}/volumes`).catch(() => ({ data: { volumes: [] } })),
           api.get(`/stories/${id}/comments`).catch(() => ({ data: { comments: [] } })),
-          api.get(`/stories/${id}/reviews`).catch(() => ({ data: { reviews: [] } })),
-          api.get(`/stories/${id}/latest-comments`).catch(() => ({ data: { latestComments: [] } }))
+          api.get(`/stories/${id}/reviews`).catch(() => ({ data: { reviews: [] } }))
         ]);
         setStory(storyRes.data);
         setNotesText(storyRes.data.additional_notes || '');
@@ -153,7 +148,6 @@ export default function StoryPage() {
         setVolumes(volumesRes.data.volumes || []);
         setComments(commentsRes.data.comments || []);
         setReviews(reviewsRes.data.reviews || []);
-        setLatestComments(latestCommentsRes.data.latestComments || []);
         // Expand first volume by default
         if (volumesRes.data.volumes?.length > 0) {
           setExpandedVolumes(new Set([volumesRes.data.volumes[0].id]));
@@ -1109,15 +1103,6 @@ export default function StoryPage() {
                 </p>
               )}
             </div>
-
-            {/* Latest Comments */}
-            {id && (
-              <LatestComments
-                storyId={id}
-                latestComments={latestComments}
-                isLoading={false}
-              />
-            )}
           </div>
         </div>
       </div>

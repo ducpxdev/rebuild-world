@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield } from 'lucide-react';
 import CommentInteractions from '../components/CommentInteractions';
+import LatestComments from '../components/LatestComments';
 
 interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; }
 interface ChapterData {
@@ -114,12 +115,23 @@ export default function ChapterPage() {
   const [comments, setComments] = useState<Comment[]>([]);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
   const [banningUserId, setBanningUserId] = useState<string | null>(null);
+  const [latestComments, setLatestComments] = useState<any[]>([]);
 
   useEffect(() => {
-    api.get(`/stories/${id}/chapters/${number}`).then(r => {
-      setChapter(r.data);
-      setComments(r.data.comments);
-    });
+    const loadChapter = async () => {
+      try {
+        const [chapterRes, latestCommentsRes] = await Promise.all([
+          api.get(`/stories/${id}/chapters/${number}`),
+          api.get(`/stories/${id}/chapters/${number}/latest-comments`).catch(() => ({ data: { latestComments: [] } }))
+        ]);
+        setChapter(chapterRes.data);
+        setComments(chapterRes.data.comments);
+        setLatestComments(latestCommentsRes.data.latestComments || []);
+      } catch (error) {
+        console.error('Error loading chapter:', error);
+      }
+    };
+    loadChapter();
     window.scrollTo(0, 0);
   }, [id, number]);
 
@@ -252,6 +264,17 @@ export default function ChapterPage() {
                 <img key={i} src={src} alt={`Page ${i + 1}`} className="w-full rounded-lg border border-slate-800/40 pointer-events-none" loading="lazy" draggable={false} />
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Latest Comments */}
+        {id && number && (
+          <div className="mt-8">
+            <LatestComments
+              storyId={id}
+              latestComments={latestComments}
+              isLoading={false}
+            />
           </div>
         )}
 

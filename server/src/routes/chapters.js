@@ -328,6 +328,49 @@ router.delete('/:number', authenticateToken, requireAdmin, async (req, res) => {
   }
 });
 
+// GET /api/stories/:storyId/chapters/:number/latest-comments — Get 7 most recent comments for this chapter
+router.get('/:number/latest-comments', async (req, res) => {
+  try {
+    const chapterNumber = parseInt(req.params.number, 10);
+    
+    if (isNaN(chapterNumber)) {
+      return res.status(400).json({ error: 'Invalid chapter number' });
+    }
+
+    // Get the chapter ID first
+    const chapterResult = await pool.query(`
+      SELECT id FROM chapters WHERE story_id = $1 AND chapter_number = $2
+    `, [req.params.storyId, chapterNumber]);
+    
+    if (chapterResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Chapter not found' });
+    }
+
+    const chapter = chapterResult.rows[0];
+
+    // Fetch the 7 most recent comments for this chapter
+    const commentsResult = await pool.query(`
+      SELECT c.*, u.username, u.avatar_url, u.is_admin
+      FROM comments c
+      JOIN users u ON c.user_id = u.id
+      WHERE c.chapter_id = $1
+      ORDER BY c.created_at DESC
+      LIMIT 7
+    `, [chapter.id]);
+
+    const latestComments = commentsResult.rows.map(c => ({
+      ...c,
+      type: 'chapter',
+      chapter_number: chapterNumber
+    }));
+
+    res.json({ latestComments });
+  } catch (error) {
+    console.error('Error fetching latest chapter comments:', error);
+    res.status(500).json({ error: 'Failed to fetch latest comments' });
+  }
+});
+
 // POST /api/stories/:storyId/chapters/:number/comments
 router.post('/:number/comments', authenticateToken, async (req, res) => {
   try {
