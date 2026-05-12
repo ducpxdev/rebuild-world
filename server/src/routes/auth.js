@@ -74,14 +74,38 @@ router.post('/login', loginLimiter, async (req, res) => {
       { expiresIn: process.env.JWT_EXPIRES_IN }
     );
 
+    // SECURITY: Set httpOnly cookie instead of returning token in response body
+    // httpOnly prevents JavaScript from accessing the token (XSS protection)
+    // secure flag ensures it's only sent over HTTPS
+    // sameSite prevents CSRF attacks
+    res.cookie('auth_token', token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/'
+    });
+
     res.json({
-      token,
       user: { id: user.id, username: user.username, email: user.email, avatar_url: user.avatar_url, bio: user.bio, is_admin: !!user.is_admin },
     });
   } catch (error) {
     console.error('Login error:', error);
     res.status(500).json({ error: 'Login failed' });
   }
+});
+
+// POST /api/auth/logout
+router.post('/logout', async (req, res) => {
+  // Clear the authentication cookie
+  res.clearCookie('auth_token', {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: 'strict',
+    path: '/'
+  });
+  
+  res.json({ success: true });
 });
 
 // GET /api/auth/verify-email?token=...

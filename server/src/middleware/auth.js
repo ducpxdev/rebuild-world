@@ -2,11 +2,12 @@ import jwt from 'jsonwebtoken';
 import { pool } from '../database.js';
 
 export function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  // SECURITY: Read token from httpOnly cookie instead of Authorization header
+  // This is more secure as the token is not accessible to JavaScript
+  const token = req.cookies?.auth_token;
 
   if (!token) {
-    return res.status(401).json({ error: 'Access token required' });
+    return res.status(401).json({ error: 'Not authenticated' });
   }
 
   try {
@@ -14,13 +15,15 @@ export function authenticateToken(req, res, next) {
     req.user = decoded;
     next();
   } catch {
-    return res.status(403).json({ error: 'Invalid or expired token' });
+    // Token expired or invalid
+    res.clearCookie('auth_token');
+    return res.status(401).json({ error: 'Not authenticated' });
   }
 }
 
 export async function requireAdmin(req, res, next) {
   if (!req.user) {
-    return res.status(401).json({ error: 'Access token required' });
+    return res.status(401).json({ error: 'Not authenticated' });
   }
   if (!req.user.is_admin) {
     return res.status(403).json({ error: 'Admin access required' });
