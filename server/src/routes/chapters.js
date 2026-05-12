@@ -46,7 +46,7 @@ router.get('/:number', optionalAuth, async (req, res) => {
     const commentsResult = await pool.query(`
       SELECT c.*, u.username, u.avatar_url FROM comments c
       JOIN users u ON c.user_id = u.id
-      WHERE c.chapter_id = $1 ORDER BY c.created_at ASC
+      WHERE c.chapter_id = $1 ORDER BY c.pinned DESC, c.created_at DESC
     `, [chapter.id]);
     const comments = commentsResult.rows;
     const commentCount = comments.length;

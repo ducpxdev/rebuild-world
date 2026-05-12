@@ -428,4 +428,166 @@ router.delete('/story/:storyCommentId/replies/:replyId', authenticateToken, asyn
   }
 });
 
+/**
+ * COMMENT PINNING ENDPOINTS
+ */
+
+// POST /api/comments/:commentId/pin - Pin a chapter comment (story author only)
+router.post('/:commentId/pin', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const userId = req.user.id;
+
+    // Check if comment exists and get chapter/story info
+    const commentResult = await pool.query(`
+      SELECT c.id, c.chapter_id, ch.story_id
+      FROM comments c
+      JOIN chapters ch ON c.chapter_id = ch.id
+      WHERE c.id = $1
+    `, [commentId]);
+
+    const comment = commentResult.rows[0];
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Check if user is the story author
+    const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [comment.story_id]);
+    const story = storyResult.rows[0];
+
+    if (!story || story.author_id !== userId) {
+      return res.status(403).json({ error: 'Only story author can pin comments' });
+    }
+
+    // Pin the comment
+    const pinTime = Math.floor(Date.now() / 1000);
+    await pool.query(
+      'UPDATE comments SET pinned = TRUE, pinned_at = $1 WHERE id = $2',
+      [pinTime, commentId]
+    );
+
+    res.json({ success: true, pinned: true });
+  } catch (error) {
+    console.error('Error pinning comment:', error);
+    res.status(500).json({ error: 'Failed to pin comment' });
+  }
+});
+
+// POST /api/comments/:commentId/unpin - Unpin a chapter comment (story author only)
+router.post('/:commentId/unpin', authenticateToken, async (req, res) => {
+  try {
+    const { commentId } = req.params;
+    const userId = req.user.id;
+
+    // Check if comment exists and get chapter/story info
+    const commentResult = await pool.query(`
+      SELECT c.id, c.chapter_id, ch.story_id
+      FROM comments c
+      JOIN chapters ch ON c.chapter_id = ch.id
+      WHERE c.id = $1
+    `, [commentId]);
+
+    const comment = commentResult.rows[0];
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Check if user is the story author
+    const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [comment.story_id]);
+    const story = storyResult.rows[0];
+
+    if (!story || story.author_id !== userId) {
+      return res.status(403).json({ error: 'Only story author can unpin comments' });
+    }
+
+    // Unpin the comment
+    await pool.query(
+      'UPDATE comments SET pinned = FALSE, pinned_at = NULL WHERE id = $1',
+      [commentId]
+    );
+
+    res.json({ success: true, pinned: false });
+  } catch (error) {
+    console.error('Error unpinning comment:', error);
+    res.status(500).json({ error: 'Failed to unpin comment' });
+  }
+});
+
+// POST /api/story-comments/:storyCommentId/pin - Pin a story comment (story author only)
+router.post('/story/:storyCommentId/pin', authenticateToken, async (req, res) => {
+  try {
+    const { storyCommentId } = req.params;
+    const userId = req.user.id;
+
+    // Check if comment exists
+    const commentResult = await pool.query(
+      'SELECT id, story_id FROM story_comments WHERE id = $1',
+      [storyCommentId]
+    );
+
+    const comment = commentResult.rows[0];
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Check if user is the story author
+    const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [comment.story_id]);
+    const story = storyResult.rows[0];
+
+    if (!story || story.author_id !== userId) {
+      return res.status(403).json({ error: 'Only story author can pin comments' });
+    }
+
+    // Pin the comment
+    const pinTime = Math.floor(Date.now() / 1000);
+    await pool.query(
+      'UPDATE story_comments SET pinned = TRUE, pinned_at = $1 WHERE id = $2',
+      [pinTime, storyCommentId]
+    );
+
+    res.json({ success: true, pinned: true });
+  } catch (error) {
+    console.error('Error pinning story comment:', error);
+    res.status(500).json({ error: 'Failed to pin comment' });
+  }
+});
+
+// POST /api/story-comments/:storyCommentId/unpin - Unpin a story comment (story author only)
+router.post('/story/:storyCommentId/unpin', authenticateToken, async (req, res) => {
+  try {
+    const { storyCommentId } = req.params;
+    const userId = req.user.id;
+
+    // Check if comment exists
+    const commentResult = await pool.query(
+      'SELECT id, story_id FROM story_comments WHERE id = $1',
+      [storyCommentId]
+    );
+
+    const comment = commentResult.rows[0];
+    if (!comment) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Check if user is the story author
+    const storyResult = await pool.query('SELECT author_id FROM stories WHERE id = $1', [comment.story_id]);
+    const story = storyResult.rows[0];
+
+    if (!story || story.author_id !== userId) {
+      return res.status(403).json({ error: 'Only story author can unpin comments' });
+    }
+
+    // Unpin the comment
+    await pool.query(
+      'UPDATE story_comments SET pinned = FALSE, pinned_at = NULL WHERE id = $1',
+      [storyCommentId]
+    );
+
+    res.json({ success: true, pinned: false });
+  } catch (error) {
+    console.error('Error unpinning story comment:', error);
+    res.status(500).json({ error: 'Failed to unpin comment' });
+  }
+});
+
 export default router;

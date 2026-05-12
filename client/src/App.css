@@ -193,3 +193,20 @@
     opacity: 0.7;
   }
 }
+
+/* Pinned comment styling with glowing, blinking effect */
+.pinned-comment {
+  position: relative;
+  animation: pinned-glow 2s ease-in-out infinite;
+}
+
+@keyframes pinned-glow {
+  0%, 100% {
+    border-color: rgba(234, 179, 8, 0.6);
+    box-shadow: 0 0 8px rgba(234, 179, 8, 0.4), inset 0 0 8px rgba(234, 179, 8, 0.2);
+  }
+  50% {
+    border-color: rgba(234, 179, 8, 1);
+    box-shadow: 0 0 16px rgba(234, 179, 8, 0.8), inset 0 0 12px rgba(234, 179, 8, 0.4);
+  }
+}

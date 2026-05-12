@@ -373,6 +373,52 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add pinned columns to comments table
+    try {
+      await pool.query(`
+        ALTER TABLE comments ADD COLUMN pinned BOOLEAN DEFAULT FALSE
+      `);
+      console.log('✓ Added pinned column to comments table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding pinned column to comments:', err.message);
+      }
+    }
+
+    try {
+      await pool.query(`
+        ALTER TABLE comments ADD COLUMN pinned_at BIGINT
+      `);
+      console.log('✓ Added pinned_at column to comments table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding pinned_at column to comments:', err.message);
+      }
+    }
+
+    // Migration: Add pinned columns to story_comments table
+    try {
+      await pool.query(`
+        ALTER TABLE story_comments ADD COLUMN pinned BOOLEAN DEFAULT FALSE
+      `);
+      console.log('✓ Added pinned column to story_comments table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding pinned column to story_comments:', err.message);
+      }
+    }
+
+    try {
+      await pool.query(`
+        ALTER TABLE story_comments ADD COLUMN pinned_at BIGINT
+      `);
+      console.log('✓ Added pinned_at column to story_comments table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding pinned_at column to story_comments:', err.message);
+      }
+    }
+
     // Create comment_likes table for liking comments
     await pool.query(`
       CREATE TABLE IF NOT EXISTS comment_likes (

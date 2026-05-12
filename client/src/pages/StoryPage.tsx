@@ -1795,7 +1795,12 @@ export default function StoryPage() {
             ) : (
               <div className="space-y-4 divide-y divide-slate-800/30">
                 {comments.map(comment => (
-                  <div key={comment.id} className="pt-4 first:pt-0 group">
+                  <div 
+                    key={comment.id} 
+                    className={`pt-4 first:pt-0 group rounded-lg p-3 border ${
+                      comment.pinned ? 'pinned-comment border-amber-600' : 'border-transparent'
+                    }`}
+                  >
                     <div className="flex items-start gap-3">
                       {comment.avatar_url ? (
                         <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
@@ -1837,7 +1842,12 @@ export default function StoryPage() {
                         </div>
                         <p className="text-slate-400 text-sm mt-1 break-words">{comment.content}</p>
                         <div className="mt-2">
-                          <CommentInteractions commentId={comment.id} isStoryComment={true} />
+                          <CommentInteractions 
+                            commentId={comment.id} 
+                            isStoryComment={true}
+                            storyAuthorId={story?.author_id}
+                            isPinned={comment.pinned || false}
+                          />
                         </div>
                       </div>
                     </div>

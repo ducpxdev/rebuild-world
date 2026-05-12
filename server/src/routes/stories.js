@@ -281,7 +281,7 @@ router.get('/:id/comments', async (req, res) => {
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.story_id = $1
-      ORDER BY sc.created_at DESC
+      ORDER BY sc.pinned DESC, sc.created_at DESC
     `, [req.params.id]);
 
     res.json({ comments: result.rows });

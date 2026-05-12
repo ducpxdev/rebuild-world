@@ -7,7 +7,7 @@ import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, Fi
 import CommentInteractions from '../components/CommentInteractions';
 import LatestComments from '../components/LatestComments';
 
-interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; }
+interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; pinned?: boolean; }
 interface ChapterData {
   id: string; story_id: string; chapter_number: number; title: string;
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
@@ -111,6 +111,7 @@ export default function ChapterPage() {
   const { id, number } = useParams<{ id: string; number: string }>();
   const { user } = useAuth();
   const [chapter, setChapter] = useState<ChapterData | null>(null);
+  const [storyAuthorId, setStoryAuthorId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
   const [comments, setComments] = useState<Comment[]>([]);
   const [deletingCommentId, setDeletingCommentId] = useState<string | null>(null);
@@ -120,13 +121,15 @@ export default function ChapterPage() {
   useEffect(() => {
     const loadChapter = async () => {
       try {
-        const [chapterRes, latestCommentsRes] = await Promise.all([
+        const [chapterRes, latestCommentsRes, storyRes] = await Promise.all([
           api.get(`/stories/${id}/chapters/${number}`),
-          api.get(`/stories/${id}/chapters/${number}/latest-comments`).catch(() => ({ data: { latestComments: [] } }))
+          api.get(`/stories/${id}/chapters/${number}/latest-comments`).catch(() => ({ data: { latestComments: [] } })),
+          api.get(`/stories/${id}`).catch(() => ({ data: { author_id: null } }))
         ]);
         setChapter(chapterRes.data);
         setComments(chapterRes.data.comments);
         setLatestComments(latestCommentsRes.data.latestComments || []);
+        setStoryAuthorId(storyRes.data.author_id);
       } catch (error) {
         console.error('Error loading chapter:', error);
       }
@@ -321,7 +324,12 @@ export default function ChapterPage() {
           ) : (
             <div className="space-y-4">
               {comments.map(c => (
-                <div key={c.id} className="group flex gap-3 rounded-lg p-3 hover:bg-slate-800/30 transition">
+                <div 
+                  key={c.id} 
+                  className={`group flex gap-3 rounded-lg p-3 hover:bg-slate-800/30 transition border ${
+                    c.pinned ? 'pinned-comment border-amber-600' : 'border-transparent'
+                  }`}
+                >
                   <div className="w-8 h-8 rounded-md bg-slate-800 flex items-center justify-center shrink-0">
                     {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-8 h-8 rounded-md object-cover" /> : <User className="w-4 h-4 text-cyan-500/50" />}
                   </div>
@@ -354,7 +362,12 @@ export default function ChapterPage() {
                     </div>
                     <p className="text-sm text-slate-400 mt-1">{c.content}</p>
                     <div className="mt-2">
-                      <CommentInteractions commentId={c.id} isStoryComment={false} />
+                      <CommentInteractions 
+                        commentId={c.id} 
+                        isStoryComment={false}
+                        storyAuthorId={storyAuthorId || undefined}
+                        isPinned={c.pinned || false}
+                      />
                     </div>
                   </div>
                 </div>

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Trash2, Send } from 'lucide-react';
+import { Heart, MessageCircle, Trash2, Send, Pin } from 'lucide-react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -16,11 +16,17 @@ interface Reply {
 interface CommentDisplayProps {
   commentId: string;
   isStoryComment?: boolean;
+  storyAuthorId?: string;
+  isPinned?: boolean;
+  onPinChange?: (pinned: boolean) => void;
 }
 
 export default function CommentInteractions({
   commentId,
-  isStoryComment = false
+  isStoryComment = false,
+  storyAuthorId,
+  isPinned = false,
+  onPinChange
 }: CommentDisplayProps) {
   const { user } = useAuth();
   const [likes, setLikes] = useState(0);
@@ -31,6 +37,8 @@ export default function CommentInteractions({
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
   const [isLoadingReplies, setIsLoadingReplies] = useState(false);
   const [likeLoading, setLikeLoading] = useState(false);
+  const [isPinning, setIsPinning] = useState(false);
+  const [pinned, setPinned] = useState(isPinned);
 
   // Load like count
   useEffect(() => {
@@ -87,6 +95,27 @@ export default function CommentInteractions({
       console.error('Error unliking comment:', error);
     } finally {
       setLikeLoading(false);
+    }
+  };
+
+  const handlePin = async () => {
+    if (!user || !storyAuthorId || user.id !== storyAuthorId || isPinning) return;
+
+    setIsPinning(true);
+    try {
+      const endpoint = isStoryComment
+        ? `/comments/story/${commentId}/${pinned ? 'unpin' : 'pin'}`
+        : `/comments/${commentId}/${pinned ? 'unpin' : 'pin'}`;
+
+      const res = await api.post(endpoint);
+      setPinned(res.data.pinned);
+      if (onPinChange) {
+        onPinChange(res.data.pinned);
+      }
+    } catch (error) {
+      console.error(`Error ${pinned ? 'unpinning' : 'pinning'} comment:`, error);
+    } finally {
+      setIsPinning(false);
     }
   };
 
@@ -167,6 +196,19 @@ export default function CommentInteractions({
           <MessageCircle className="w-4 h-4" />
           <span className="text-xs">{replies.length > 0 ? replies.length : ''}</span>
         </button>
+
+        {storyAuthorId && user?.id === storyAuthorId && (
+          <button
+            onClick={handlePin}
+            disabled={isPinning}
+            className={`flex items-center gap-1 transition ${
+              pinned ? 'text-yellow-400' : 'hover:text-yellow-400 text-slate-400'
+            } disabled:opacity-50`}
+            title={pinned ? 'Unpin comment' : 'Pin comment'}
+          >
+            <Pin className={`w-4 h-4 ${pinned ? 'fill-current' : ''}`} />
+          </button>
+        )}
       </div>
 
       {/* Replies Section */}
