@@ -47,6 +47,10 @@ export default function StoryPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
+  const volumesRef = useRef<HTMLDivElement | null>(null);
+  const chaptersRef = useRef<HTMLDivElement | null>(null);
+  const commentsRef = useRef<HTMLDivElement | null>(null);
+  const reviewsRef = useRef<HTMLDivElement | null>(null);
   const [story, setStory] = useState<StoryDetail | null>(null);
   const [volumes, setVolumes] = useState<Volume[]>([]);
   const [expandedVolumes, setExpandedVolumes] = useState<Set<string>>(new Set());
@@ -104,6 +108,9 @@ export default function StoryPage() {
   const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
   const [reorderingLoading, setReorderingLoading] = useState(false);
+
+  // Latest chapters state
+  const [showLatestChapters, setShowLatestChapters] = useState(true);
 
   useEffect(() => {
     const loadStory = async () => {
@@ -734,11 +741,112 @@ export default function StoryPage() {
         </div>
       </div>
 
+      {/* Sticky Jump Navigation */}
+      {(volumes.length > 0 || comments.length > 0 || reviews.length > 0) && (
+        <div className="sticky top-0 z-40 bg-gradient-to-r from-slate-900/95 via-slate-900/95 to-slate-900/95 border-b border-slate-800/60 backdrop-blur-sm">
+          <div className="max-w-6xl mx-auto px-4 sm:px-6">
+            <nav className="flex items-center gap-1 py-3 overflow-x-auto">
+              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap mr-3">Jump to:</span>
+              {volumes.length > 0 && (
+                <button
+                  onClick={() => volumesRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
+                >
+                  Volumes
+                </button>
+              )}
+              {story.chapters.length > 0 && (
+                <button
+                  onClick={() => chaptersRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
+                >
+                  Chapters
+                </button>
+              )}
+              {comments.length > 0 && (
+                <button
+                  onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
+                >
+                  Comments ({comments.length})
+                </button>
+              )}
+              {reviews.length > 0 && (
+                <button
+                  onClick={() => reviewsRef.current?.scrollIntoView({ behavior: 'smooth' })}
+                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
+                >
+                  Reviews ({reviews.length})
+                </button>
+              )}
+            </nav>
+          </div>
+        </div>
+      )}
+
       {/* Main content — two-column layout */}
       <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left: synopsis */}
           <div className="flex-1 min-w-0 space-y-6">
+            {/* Latest Chapters Preview */}
+            {story.chapters.length > 0 && (
+              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
+                <button
+                  onClick={() => setShowLatestChapters(!showLatestChapters)}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-900/50 transition group"
+                >
+                  <h2 className="text-lg font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2 group-hover:text-cyan-400 transition">
+                    <BookOpen className="w-5 h-5 text-cyan-500" /> Latest Chapters
+                  </h2>
+                  {showLatestChapters ? (
+                    <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
+                  ) : (
+                    <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
+                  )}
+                </button>
+                {showLatestChapters && (
+                  <div className="divide-y divide-slate-800/30 px-6 py-4">
+                    {story.chapters.slice(-5).reverse().map((chapter) => {
+                      const volume = volumes.find(v => v.id === chapter.volume_id);
+                      return (
+                        <Link
+                          key={chapter.id}
+                          to={`/story/${story.id}/chapter/${chapter.chapter_number}`}
+                          className="flex items-center gap-4 py-3 hover:bg-cyan-500/5 px-3 -mx-3 rounded transition group first:pt-0 last:pb-0"
+                        >
+                          {volume?.cover_url && (
+                            <img
+                              src={volume.cover_url}
+                              alt={volume.title}
+                              className="w-12 h-16 rounded object-cover border border-slate-700/50 shrink-0 group-hover:scale-105 transition"
+                            />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 mb-1">
+                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
+                                {volume ? volume.title || `Volume ${volume.volume_number}` : 'Unknown Volume'}
+                              </span>
+                            </div>
+                            <h3 className="font-medium text-slate-200 group-hover:text-cyan-400 transition truncate">
+                              Chapter {chapter.chapter_number}: {chapter.title}
+                            </h3>
+                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
+                              <span className="flex items-center gap-1">
+                                <Eye className="w-3 h-3" /> {chapter.views.toLocaleString()}
+                              </span>
+                              <span>{new Date(chapter.created_at * 1000).toLocaleDateString()}</span>
+                            </div>
+                          </div>
+                          <ChevronDown className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 transition rotate-[-90deg]" />
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* Synopsis */}
             {story.description && (
               <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
@@ -820,7 +928,7 @@ export default function StoryPage() {
 
             {/* User Reviews */}
             {reviews.length > 0 && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+              <div ref={reviewsRef} className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
                 <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">
                   Reader Reviews ({reviews.length})
                 </h2>
@@ -1028,7 +1136,7 @@ export default function StoryPage() {
       )}
 
       {/* Volumes and Chapters section */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
+      <div ref={volumesRef} className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
         <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
           {/* Header */}
           <div className="flex items-start gap-4 p-6 border-b border-slate-800/40">
@@ -1532,7 +1640,7 @@ export default function StoryPage() {
               })}
             </div>
           ) : (
-            <div className="divide-y divide-slate-800/30">
+            <div ref={chaptersRef} className="divide-y divide-slate-800/30">
               {story.chapters.map(ch => (
                 <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
                   className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
@@ -1561,7 +1669,7 @@ export default function StoryPage() {
       </div>
 
       {/* Comments section */}
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
+      <div ref={commentsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
         <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
           <div className="p-6 border-b border-slate-800/40">
             <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
