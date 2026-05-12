@@ -10,7 +10,8 @@ export default function EditStoryPage() {
   const navigate = useNavigate();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [genre, setGenre] = useState('');
+  const [genres, setGenres] = useState<string[]>([]);
+  const [workAuthorName, setWorkAuthorName] = useState('');
   const [illustratorName, setIllustratorName] = useState('');
   const [translatorName, setTranslatorName] = useState('');
   const [tags, setTags] = useState('');
@@ -30,7 +31,8 @@ export default function EditStoryPage() {
       const s = r.data;
       setTitle(s.title);
       setDescription(s.description || '');
-      setGenre(s.genre || '');
+      setGenres((s.genre || '').split(',').map((g: string) => g.trim()).filter(Boolean));
+      setWorkAuthorName(s.work_author_name || '');
       setIllustratorName(s.illustrator_name || '');
       setTranslatorName(s.translator_name || '');
       setTags(s.tags || '');
@@ -58,7 +60,8 @@ export default function EditStoryPage() {
     const formData = new FormData();
     formData.append('title', title);
     formData.append('description', description);
-    formData.append('genre', genre);
+    formData.append('genre', genres.join(', '));
+    formData.append('work_author_name', workAuthorName);
     formData.append('illustrator_name', illustratorName);
     formData.append('translator_name', translatorName);
     formData.append('tags', tags);
@@ -141,12 +144,29 @@ export default function EditStoryPage() {
 
         {/* Genre */}
         <div>
-          <label className="block text-sm font-medium text-slate-400 mb-1">Genre</label>
-          <select value={genre} onChange={e => setGenre(e.target.value)}
-            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 outline-none text-slate-400">
-            <option value="">Select genre</option>
-            {GENRES.map(g => <option key={g} value={g}>{g}</option>)}
-          </select>
+          <label className="block text-sm font-medium text-slate-400 mb-3">Genres</label>
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {GENRES.map(g => (
+              <label key={g} className="flex items-center gap-2 cursor-pointer">
+                <input type="checkbox" checked={genres.includes(g)} onChange={e => {
+                  if (e.target.checked) {
+                    setGenres([...genres, g]);
+                  } else {
+                    setGenres(genres.filter(x => x !== g));
+                  }
+                }}
+                  className="w-4 h-4 rounded border-slate-600 text-cyan-500 focus:ring-cyan-500 bg-slate-900" />
+                <span className="text-sm text-slate-400 group-hover:text-slate-300">{g}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        {/* Work Author Name */}
+        <div>
+          <label className="block text-sm font-medium text-slate-400 mb-1">Author Name</label>
+          <input type="text" value={workAuthorName} onChange={e => setWorkAuthorName(e.target.value)}
+            className="w-full px-4 py-3 rounded-lg bg-slate-900/50 border border-slate-700/50 focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 outline-none text-slate-300 placeholder-slate-600" placeholder="Name of the work's author (optional)" />
         </div>
 
         {/* Illustrator Name */}

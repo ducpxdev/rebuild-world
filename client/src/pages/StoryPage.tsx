@@ -12,7 +12,7 @@ interface StoryDetail {
   views: number; rating_avg: number; rating_count: number; user_rating: number;
   bookmark_count: number; comment_count: number; bookmarked: boolean;
   author_name: string; author_avatar?: string; author_id: string;
-  illustrator_name?: string; translator_name?: string;
+  work_author_name?: string; illustrator_name?: string; translator_name?: string;
   chapter_count: number; chapters: Chapter[]; created_at: number; updated_at: number;
   total_word_count?: number; additional_notes?: string;
 }
@@ -571,6 +571,7 @@ export default function StoryPage() {
   );
 
   const tags = story.tags?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
+  const genres = story.genre?.split(',').map(g => g.trim()).filter(Boolean) ?? [];
   const descTruncated = story.description && story.description.length > 400 && !showFullDesc;
 
   return (
@@ -605,11 +606,51 @@ export default function StoryPage() {
 
             {/* Info */}
             <div className="flex-1 min-w-0 pb-6">
-              {/* Genre tags row */}
-              <div className="flex items-center gap-2 flex-wrap mb-3">
-                {story.genre && (
-                  <span className="px-3 py-1 bg-cyan-500/10 text-cyan-400 text-xs font-semibold rounded border border-cyan-500/20">{story.genre}</span>
+              {/* Genres above title */}
+              {genres.length > 0 && (
+                <div className="flex items-center gap-2 flex-wrap mb-3">
+                  {genres.map(g => (
+                    <span key={g} className="px-3 py-1 bg-cyan-500/10 text-cyan-400 text-xs font-semibold rounded border border-cyan-500/20">{g}</span>
+                  ))}
+                </div>
+              )}
+
+              {/* Title */}
+              <h1 className="text-3xl md:text-4xl font-bold text-slate-50 mb-6 font-['Rajdhani'] tracking-wide leading-tight">{story.title}</h1>
+
+              {/* Translator (Story Creator) */}
+              <Link to={`/user/${story.author_name}`} className="inline-flex items-center gap-2.5 mb-4 group">
+                {story.author_avatar ? (
+                  <img src={story.author_avatar} alt="" className="w-9 h-9 rounded-lg object-cover ring-2 ring-cyan-500/20" />
+                ) : (
+                  <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center ring-2 ring-slate-700"><User className="w-4 h-4 text-cyan-500/50" /></div>
                 )}
+                <div>
+                  <span className="text-sm font-medium text-slate-300 group-hover:text-cyan-400 transition">{story.author_name}</span>
+                  <span className="flex items-center gap-1 text-[10px] text-cyan-500/60 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Translator</span>
+                </div>
+              </Link>
+
+              {/* Author and Illustrator Info */}
+              {(story.work_author_name || story.illustrator_name) && (
+                <div className="flex flex-col gap-2 mb-5">
+                  {story.work_author_name && (
+                    <div className="text-sm">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Author: </span>
+                      <span className="text-slate-300">{story.work_author_name}</span>
+                    </div>
+                  )}
+                  {story.illustrator_name && (
+                    <div className="text-sm">
+                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Illustrator: </span>
+                      <span className="text-slate-300">{story.illustrator_name}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Genre tags row - below metadata */}
+              <div className="flex items-center gap-2 flex-wrap mb-5">
                 {tags.map(t => (
                   <span key={t} className="px-2.5 py-1 bg-slate-800/80 text-slate-400 text-xs rounded border border-slate-700/50">#{t}</span>
                 ))}
@@ -619,40 +660,6 @@ export default function StoryPage() {
                 </span>
                 )}
               </div>
-
-              {/* Title */}
-              <h1 className="text-3xl md:text-4xl font-bold text-slate-50 mb-3 font-['Rajdhani'] tracking-wide leading-tight">{story.title}</h1>
-
-              {/* Author */}
-              <Link to={`/user/${story.author_name}`} className="inline-flex items-center gap-2.5 mb-5 group">
-                {story.author_avatar ? (
-                  <img src={story.author_avatar} alt="" className="w-9 h-9 rounded-lg object-cover ring-2 ring-cyan-500/20" />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center ring-2 ring-slate-700"><User className="w-4 h-4 text-cyan-500/50" /></div>
-                )}
-                <div>
-                  <span className="text-sm font-medium text-slate-300 group-hover:text-cyan-400 transition">{story.author_name}</span>
-                  <span className="flex items-center gap-1 text-[10px] text-cyan-500/60 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Author</span>
-                </div>
-              </Link>
-
-              {/* Illustrator and Translator Names */}
-              {(story.illustrator_name || story.translator_name) && (
-                <div className="flex flex-col gap-2 mb-5">
-                  {story.illustrator_name && (
-                    <div className="text-sm">
-                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Illustrator: </span>
-                      <span className="text-slate-300">{story.illustrator_name}</span>
-                    </div>
-                  )}
-                  {story.translator_name && (
-                    <div className="text-sm">
-                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Translator: </span>
-                      <span className="text-slate-300">{story.translator_name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
 
               {/* Action buttons */}
               <div className="flex items-center gap-3 flex-wrap">

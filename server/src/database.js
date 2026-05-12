@@ -274,6 +274,32 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add author_name column to stories table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE stories ADD COLUMN author_name TEXT DEFAULT ''
+      `);
+      console.log('✓ Added author_name column to stories table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding author_name column:', err.message);
+      }
+    }
+
+    // Migration: Add work_author_name column to stories table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE stories ADD COLUMN work_author_name TEXT DEFAULT ''
+      `);
+      console.log('✓ Added work_author_name column to stories table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding work_author_name column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
