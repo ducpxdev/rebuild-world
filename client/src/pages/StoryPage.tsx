@@ -11,7 +11,7 @@ interface StoryDetail {
   type: 'text' | 'comic'; genre?: string; tags?: string; status?: string;
   views: number; rating_avg: number; rating_count: number; user_rating: number;
   bookmark_count: number; comment_count: number; bookmarked: boolean;
-  author_name: string; author_avatar?: string; author_id: string;
+  author_name: string; author_avatar?: string; author_id: string; author_is_admin?: number;
   work_author_name?: string; illustrator_name?: string; translator_name?: string;
   chapter_count: number; chapters: Chapter[]; created_at: number; updated_at: number;
   total_word_count?: number; additional_notes?: string;
@@ -626,7 +626,10 @@ export default function StoryPage() {
                   <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center ring-2 ring-slate-700"><User className="w-4 h-4 text-cyan-500/50" /></div>
                 )}
                 <div>
-                  <span className="text-sm font-medium text-slate-300 group-hover:text-cyan-400 transition">{story.author_name}</span>
+                  <span className={`text-sm font-medium transition ${story.author_is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500 group-hover:from-purple-300 group-hover:via-purple-200 group-hover:to-purple-400' : 'text-slate-300 group-hover:text-cyan-400'}`}>
+                    {story.author_name}
+                    {story.author_is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
+                  </span>
                   <span className="flex items-center gap-1 text-[10px] text-cyan-500/60 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Translator</span>
                 </div>
               </Link>
@@ -1617,8 +1620,11 @@ export default function StoryPage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium text-slate-300">{comment.username}</span>
+                      <div className="flex items-center gap-2">
+                          <span className={`font-medium ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500' : 'text-slate-300'}`}>
+                            {comment.username}
+                            {comment.is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
+                          </span>
                           <span className="text-xs text-slate-600">
                             {new Date(comment.created_at * 1000).toLocaleDateString()}
                           </span>

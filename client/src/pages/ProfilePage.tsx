@@ -43,7 +43,7 @@ export default function ProfilePage() {
     setFollowerCount(c => c + (r.data.following ? 1 : -1));
   };
 
-  const MAX_FILE_SIZE = 400 * 1024 * 1024; // 400MB
+  const MAX_FILE_SIZE = 400 * 1024; // 400kB
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -51,7 +51,7 @@ export default function ProfilePage() {
 
     // Check file size
     if (file.size > MAX_FILE_SIZE) {
-      setSizeWarning(`File size exceeds 400 MB limit. Your file is ${(file.size / 1024 / 1024).toFixed(2)} MB.`);
+      setSizeWarning(`File size exceeds 400 kB limit. Your file is ${(file.size / 1024).toFixed(2)} kB.`);
       setAvatarPreview(null);
       setAvatarFile(null);
       return;

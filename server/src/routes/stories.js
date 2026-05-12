@@ -62,7 +62,7 @@ router.get('/', optionalAuth, async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const storyResult = await pool.query(`
-      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
+      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar, u.is_admin as author_is_admin,
         (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count,
         (SELECT COUNT(*) FROM bookmarks b WHERE b.story_id = s.id) as bookmark_count,
         (
@@ -271,7 +271,7 @@ router.post('/:id/bookmark', authenticateToken, async (req, res) => {
 router.get('/:id/comments', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT sc.*, u.username, u.avatar_url
+      SELECT sc.*, u.username, u.avatar_url, u.is_admin
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.story_id = $1
