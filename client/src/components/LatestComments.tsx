@@ -37,7 +37,7 @@ export default function LatestComments({ storyId, latestComments, isLoading }: L
     if (comment.type === 'story') {
       return 'on story';
     } else if (comment.type === 'chapter') {
-      return `in Ch. ${comment.chapter_number}: ${comment.chapter_title || 'Untitled'}`;
+      return `in ${comment.chapter_title || 'Untitled'}`;
     }
     return '';
   };
