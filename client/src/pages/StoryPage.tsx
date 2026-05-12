@@ -10,19 +10,6 @@ const TAG_CATEGORIES = {
   manga: { label: 'Manga', color: 'orange', badgeColor: 'bg-amber-500' },
 };
 
-const getTagColor = (tag: string) => {
-  const normalized = tag.trim().toLowerCase().replace(/\s+/g, '_');
-  const tagInfo = TAG_CATEGORIES[normalized as keyof typeof TAG_CATEGORIES];
-  if (!tagInfo) return { bg: 'bg-slate-800/80', border: 'border-slate-700/50', text: 'text-slate-400' };
-  
-  const colorMap = {
-    red: { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
-    yellow: { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400' },
-    orange: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
-  };
-  return colorMap[tagInfo.color as keyof typeof colorMap];
-};
-
 const getCategoryBadge = (tags?: string) => {
   if (!tags) return null;
   const tagArray = tags.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '_'));
@@ -636,7 +623,6 @@ export default function StoryPage() {
     </div>
   );
 
-  const tags = story.tags?.split(',').map(t => t.trim()).filter(Boolean) ?? [];
   const genres = story.genre?.split(',').map(g => g.trim()).filter(Boolean) ?? [];
   const descTruncated = story.description && story.description.length > 400 && !showFullDesc;
 
@@ -727,20 +713,14 @@ export default function StoryPage() {
                 </div>
               )}
 
-              {/* Genre tags row - below metadata */}
-              <div className="flex items-center gap-2 flex-wrap mb-5">
-                {tags.map(t => {
-                  const colors = getTagColor(t);
-                  return (
-                    <span key={t} className={`px-2.5 py-1 ${colors.bg} ${colors.text} text-xs rounded border ${colors.border}`}>{t}</span>
-                  );
-                })}
-                {story.status && (
-                  <span className={`px-3 py-1 rounded text-xs font-semibold ml-auto ${story.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : story.status === 'hiatus' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
-                  {story.status === 'ongoing' ? '● Ongoing' : story.status === 'completed' ? '✓ Completed' : '⏸ Hiatus'}
-                </span>
-                )}
-              </div>
+              {/* Status row - below metadata */}
+              {story.status && (
+                <div className="flex items-center gap-2 mb-5">
+                  <span className={`px-3 py-1 rounded text-xs font-semibold ${story.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : story.status === 'hiatus' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
+                    {story.status === 'ongoing' ? '● Ongoing' : story.status === 'completed' ? '✓ Completed' : '⏸ Hiatus'}
+                  </span>
+                </div>
+              )}
 
               {/* Action buttons */}
               <div className="flex items-center gap-3 flex-wrap">
