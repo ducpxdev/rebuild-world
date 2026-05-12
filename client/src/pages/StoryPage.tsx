@@ -104,6 +104,10 @@ export default function StoryPage() {
   const [reviewError, setReviewError] = useState('');
   const [reviewSuccess, setReviewSuccess] = useState(false);
 
+  // User ban state
+  const [userCommentsBanned, setUserCommentsBanned] = useState(false);
+  const [banningUserId, setBanningUserId] = useState<string | null>(null);
+
   // Drag-and-drop state
   const [draggedChapterId, setDraggedChapterId] = useState<string | null>(null);
   const [draggedOverChapterId, setDraggedOverChapterId] = useState<string | null>(null);
@@ -452,8 +456,36 @@ export default function StoryPage() {
     } catch (error: any) {
       const errorMsg = error.response?.data?.error || 'Failed to post comment';
       setCommentError(errorMsg);
+      if (errorMsg.includes('banned')) {
+        setUserCommentsBanned(true);
+      }
     } finally {
       setCommentLoading(false);
+    }
+  };
+
+  const deleteComment = async (commentId: string) => {
+    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    
+    try {
+      await api.delete(`/stories/${id}/comments/${commentId}`);
+      setComments(comments.filter(c => c.id !== commentId));
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to delete comment');
+    }
+  };
+
+  const banUserFromComments = async (userId: string, username: string) => {
+    if (!window.confirm(`Ban ${username} from commenting and reviewing? This action cannot be undone.`)) return;
+    
+    setBanningUserId(userId);
+    try {
+      await api.post(`/users/${userId}/ban-from-comments`, {});
+      alert(`${username} has been banned from commenting and reviewing`);
+    } catch (error: any) {
+      alert(error.response?.data?.error || 'Failed to ban user');
+    } finally {
+      setBanningUserId(null);
     }
   };
 
@@ -869,7 +901,12 @@ export default function StoryPage() {
 
             {/* Rate this series */}
             {user && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
+              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6" style={{ opacity: userCommentsBanned ? 0.5 : 1 }}>
+                {userCommentsBanned && (
+                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
+                    ✗ You have been banned from commenting and reviewing
+                  </div>
+                )}
                 <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide flex items-center gap-2">
                   <Star className="w-5 h-5 text-amber-400" /> Rate this series
                 </h2>
@@ -878,19 +915,19 @@ export default function StoryPage() {
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Your rating</label>
                     <div className="flex items-center gap-3">
-                      <StarRating rating={userRating} onRate={handleRate} interactive />
+                      <StarRating rating={userRating} onRate={userCommentsBanned ? undefined : handleRate} interactive={!userCommentsBanned} />
                       {userRating > 0 && <span className="text-sm text-amber-400 font-bold">{userRating}/5</span>}
                     </div>
                   </div>
 
                   <div>
                     <label className="block text-sm font-medium text-slate-300 mb-2">Your review (optional)</label>
-                    {reviewSuccess && (
+                    {reviewSuccess && !userCommentsBanned && (
                       <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
                         ✓ Review submitted successfully!
                       </div>
                     )}
-                    {reviewError && (
+                    {reviewError && !userCommentsBanned && (
                       <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
                         ✗ {reviewError}
                       </div>
@@ -901,8 +938,8 @@ export default function StoryPage() {
                         setReviewText(e.target.value);
                         setReviewError('');
                       }}
-                      placeholder="Share your thoughts about this story (minimum 9 characters)..."
-                      disabled={reviewLoading}
+                      placeholder={userCommentsBanned ? "You have been banned from reviewing" : "Share your thoughts about this story (minimum 9 characters)..."}
+                      disabled={reviewLoading || userCommentsBanned}
                       className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
                     />
                     <div className="mt-2 flex items-center justify-between">
@@ -911,9 +948,9 @@ export default function StoryPage() {
                       </span>
                       <button
                         onClick={submitReview}
-                        disabled={reviewLoading || userRating === 0}
+                        disabled={reviewLoading || userRating === 0 || userCommentsBanned}
                         className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                          reviewText.trim().length < 9 || userRating === 0
+                          reviewText.trim().length < 9 || userRating === 0 || userCommentsBanned
                             ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
                             : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
                         } disabled:opacity-50`}
@@ -954,13 +991,23 @@ export default function StoryPage() {
                           <span className="text-sm font-medium text-slate-300">{review.username}</span>
                           <span className="text-xs text-slate-600">{timeSince(review.created_at)}</span>
                           {user?.is_admin && (
-                            <button
-                              onClick={() => deleteReview(review.user_id)}
-                              className="ml-auto text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition flex items-center gap-1"
-                              title="Delete review"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
+                            <div className="ml-auto flex items-center gap-2">
+                              <button
+                                onClick={() => deleteReview(review.user_id)}
+                                className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition flex items-center gap-1"
+                                title="Delete review"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                              <button
+                                onClick={() => banUserFromComments(review.user_id, review.username)}
+                                disabled={banningUserId === review.user_id}
+                                className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Ban user from commenting"
+                              >
+                                {banningUserId === review.user_id ? 'Banning...' : 'Ban'}
+                              </button>
+                            </div>
                           )}
                         </div>
                         <p className="text-sm text-slate-400 leading-relaxed">{review.review_text}</p>
@@ -1678,10 +1725,17 @@ export default function StoryPage() {
           </div>
 
           <div className="p-6">
+            {/* Ban notice */}
+            {userCommentsBanned && (
+              <div className="mb-6 p-4 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
+                ✗ You have been banned from commenting and reviewing
+              </div>
+            )}
+
             {/* Comment form */}
             {user ? (
-              <form onSubmit={addComment} className="mb-6 space-y-3">
-                {commentError && (
+              <form onSubmit={addComment} className="mb-6 space-y-3" style={{ opacity: userCommentsBanned ? 0.5 : 1 }}>
+                {commentError && !userCommentsBanned && (
                   <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
                     ✗ {commentError}
                   </div>
@@ -1689,14 +1743,14 @@ export default function StoryPage() {
                 <textarea
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder="Share your thoughts about this story..."
-                  disabled={commentLoading}
+                  placeholder={userCommentsBanned ? "You have been banned from commenting" : "Share your thoughts about this story..."}
+                  disabled={commentLoading || userCommentsBanned}
                   className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
                 />
                 <div className="flex justify-end">
                   <button
                     type="submit"
-                    disabled={!newComment.trim() || commentLoading}
+                    disabled={!newComment.trim() || commentLoading || userCommentsBanned}
                     className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
                   >
                     {commentLoading ? 'Posting...' : 'Post Comment'}
@@ -1718,7 +1772,7 @@ export default function StoryPage() {
             ) : (
               <div className="space-y-4 divide-y divide-slate-800/30">
                 {comments.map(comment => (
-                  <div key={comment.id} className="pt-4 first:pt-0">
+                  <div key={comment.id} className="pt-4 first:pt-0 group">
                     <div className="flex items-start gap-3">
                       {comment.avatar_url ? (
                         <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
@@ -1728,14 +1782,35 @@ export default function StoryPage() {
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2">
-                          <span className={`font-medium ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500' : 'text-slate-300'}`}>
-                            {comment.username}
-                            {comment.is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
-                          </span>
-                          <span className="text-xs text-slate-600">
-                            {new Date(comment.created_at * 1000).toLocaleDateString()}
-                          </span>
+                        <div className="flex items-center gap-2 justify-between">
+                          <div className="flex items-center gap-2">
+                            <span className={`font-medium ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500' : 'text-slate-300'}`}>
+                              {comment.username}
+                              {comment.is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
+                            </span>
+                            <span className="text-xs text-slate-600">
+                              {new Date(comment.created_at * 1000).toLocaleDateString()}
+                            </span>
+                          </div>
+                          {user?.is_admin && (
+                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                              <button
+                                onClick={() => deleteComment(comment.id)}
+                                className="p-1 text-red-500/70 hover:text-red-400 hover:bg-red-500/10 rounded transition text-xs"
+                                title="Delete comment"
+                              >
+                                <X className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => banUserFromComments(comment.user_id, comment.username)}
+                                disabled={banningUserId === comment.user_id}
+                                className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                                title="Ban user from commenting"
+                              >
+                                {banningUserId === comment.user_id ? 'Banning...' : 'Ban'}
+                              </button>
+                            </div>
+                          )}
                         </div>
                         <p className="text-slate-400 text-sm mt-1 break-words">{comment.content}</p>
                       </div>

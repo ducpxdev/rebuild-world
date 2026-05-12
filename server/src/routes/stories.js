@@ -206,6 +206,12 @@ router.post('/:id/rate', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Rating must be an integer between 1 and 5' });
     }
 
+    // Check if user is banned from commenting/reviewing
+    const userResult = await pool.query('SELECT comments_banned FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows.length > 0 && userResult.rows[0].comments_banned) {
+      return res.status(403).json({ error: 'You have been banned from commenting and reviewing' });
+    }
+
     // If review_text is provided, validate it's longer than 8 characters
     if (review_text !== undefined && review_text !== null && review_text !== '') {
       if (review_text.trim().length < 9) {
@@ -295,6 +301,12 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
       return res.status(400).json({ error: 'Comment cannot be empty' });
     }
 
+    // Check if user is banned from commenting
+    const userResult = await pool.query('SELECT comments_banned FROM users WHERE id = $1', [req.user.id]);
+    if (userResult.rows.length > 0 && userResult.rows[0].comments_banned) {
+      return res.status(403).json({ error: 'You have been banned from commenting and reviewing' });
+    }
+
     // Verify story exists
     const storyResult = await pool.query('SELECT id FROM stories WHERE id = $1', [id]);
     if (storyResult.rows.length === 0) {
@@ -308,7 +320,7 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     );
 
     const commentResult = await pool.query(`
-      SELECT sc.*, u.username, u.avatar_url
+      SELECT sc.*, u.username, u.avatar_url, u.is_admin
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.id = $1
@@ -318,6 +330,49 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
   } catch (error) {
     console.error('Error creating story comment:', error);
     res.status(500).json({ error: 'Failed to create comment' });
+  }
+});
+
+// DELETE /api/stories/:id/comments/:commentId — admin only
+router.delete('/:id/comments/:commentId', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id, commentId } = req.params;
+
+    // Verify comment exists and belongs to this story
+    const commentResult = await pool.query(
+      'SELECT user_id FROM story_comments WHERE id = $1 AND story_id = $2',
+      [commentId, id]
+    );
+    if (commentResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Comment not found' });
+    }
+
+    // Delete the comment
+    await pool.query('DELETE FROM story_comments WHERE id = $1', [commentId]);
+    res.json({ success: true, message: 'Comment deleted' });
+  } catch (error) {
+    console.error('Error deleting comment:', error);
+    res.status(500).json({ error: 'Failed to delete comment' });
+  }
+});
+
+// POST /api/users/:userId/ban-from-comments — admin only
+router.post('/users/:userId/ban-from-comments', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    // Verify user exists
+    const userResult = await pool.query('SELECT id FROM users WHERE id = $1', [userId]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Ban user from commenting
+    await pool.query('UPDATE users SET comments_banned = 1 WHERE id = $1', [userId]);
+    res.json({ success: true, message: 'User banned from commenting and reviewing' });
+  } catch (error) {
+    console.error('Error banning user:', error);
+    res.status(500).json({ error: 'Failed to ban user' });
   }
 });
 

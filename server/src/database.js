@@ -300,6 +300,19 @@ export async function initDb() {
       }
     }
 
+    // Migration: Add comments_banned column to users table if it doesn't exist
+    try {
+      await pool.query(`
+        ALTER TABLE users ADD COLUMN comments_banned INTEGER DEFAULT 0
+      `);
+      console.log('✓ Added comments_banned column to users table');
+    } catch (err) {
+      // Column already exists, ignore error
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding comments_banned column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {
