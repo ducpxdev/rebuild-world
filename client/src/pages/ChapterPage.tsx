@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
-import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield, Eye } from 'lucide-react';
 import CommentInteractions from '../components/CommentInteractions';
 import LatestComments from '../components/LatestComments';
 
@@ -12,7 +12,7 @@ interface ChapterData {
   id: string; story_id: string; chapter_number: number; title: string;
   content?: string; images?: string; type: 'text' | 'comic'; story_title: string;
   prev: number | null; next: number | null; comments: Comment[];
-  commentCount?: number; created_at?: number; updated_at?: number;
+  commentCount?: number; created_at?: number; updated_at?: number; views?: number;
 }
 // Parse markdown content and render with embedded images
 // IMPORTANT: Only renders database-backed images from /api/images/ endpoint
@@ -181,7 +181,7 @@ export default function ChapterPage() {
     <div className="min-h-screen bg-[#0a0a12]">
       {/* Chapter nav bar */}
       <div className="sticky top-16 z-40 bg-[#0d0d18]/90 backdrop-blur-xl border-b border-slate-800/60">
-        <div className="max-w-4xl mx-auto px-4 flex items-center justify-between h-12">
+        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-12">
           <Link to={`/story/${id}`} className="text-sm text-slate-500 hover:text-cyan-400 transition truncate max-w-[40%]">
             ← {chapter.story_title}
           </Link>
@@ -207,7 +207,7 @@ export default function ChapterPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         {chapter.type === 'text' ? (
           <article
             className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6 md:p-10"
@@ -219,6 +219,10 @@ export default function ChapterPage() {
           >
             <h1 className="text-2xl font-bold text-slate-100 mb-2 font-['Rajdhani'] tracking-wide">{chapter.title}</h1>
             <div className="flex flex-wrap items-center gap-4 text-sm text-slate-500 mb-6 pb-4 border-b border-slate-700/50">
+              <div className="flex items-center gap-1">
+                <Eye className="w-4 h-4" />
+                <span>{(chapter.views || 0).toLocaleString()} views</span>
+              </div>
               <div className="flex items-center gap-1">
                 <MessageCircle className="w-4 h-4" />
                 <span>{chapter.commentCount ?? comments.length} {(chapter.commentCount ?? comments.length) === 1 ? 'comment' : 'comments'}</span>
