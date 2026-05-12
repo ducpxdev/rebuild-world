@@ -181,7 +181,7 @@ export default function ChapterPage() {
     <div className="min-h-screen bg-[#0a0a12]">
       {/* Chapter nav bar */}
       <div className="sticky top-16 z-40 bg-[#0d0d18]/90 backdrop-blur-xl border-b border-slate-800/60">
-        <div className="max-w-5xl mx-auto px-4 flex items-center justify-between h-12">
+        <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-12">
           <Link to={`/story/${id}`} className="text-sm text-slate-500 hover:text-cyan-400 transition truncate max-w-[40%]">
             ← {chapter.story_title}
           </Link>
@@ -207,7 +207,7 @@ export default function ChapterPage() {
       </div>
 
       {/* Content */}
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
         {chapter.type === 'text' ? (
           <article
             className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6 md:p-10"
