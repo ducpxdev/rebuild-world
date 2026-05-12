@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import api from '../lib/api';
+import { secureLog, cleanupTokensFromURL } from '../lib/security';
 
 interface User {
   id: string;
@@ -12,10 +13,10 @@ interface User {
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
+  isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
   register: (username: string, email: string, password: string) => Promise<string>;
-  logout: () => void;
+  logout: () => Promise<void>;
   loading: boolean;
   updateUser: (u: User) => void;
 }
@@ -24,64 +25,107 @@ const AuthContext = createContext<AuthContextType | null>(null);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(() => {
-    // Check for token in localStorage or URL params (from Google OAuth callback)
-    const stored = localStorage.getItem('token');
-    if (stored) return stored;
-
-    // Check URL params (from OAuth redirect)
-    const params = new URLSearchParams(window.location.search);
-    const urlToken = params.get('token');
-    if (urlToken) {
-      localStorage.setItem('token', urlToken);
-      // Clean up URL
-      window.history.replaceState({}, document.title, window.location.pathname);
-      return urlToken;
-    }
-    return null;
-  });
   const [loading, setLoading] = useState(true);
 
+  /**
+   * Initialize authentication on app load
+   * SECURITY: Tokens are in httpOnly cookies, not in state
+   */
   useEffect(() => {
-    if (token) {
-      api.get('/auth/me')
-        .then((res) => {
-          // Ensure is_admin is a boolean
-          const userData = { ...res.data, is_admin: !!res.data.is_admin };
-          setUser(userData);
-        })
-        .catch(() => {
-          localStorage.removeItem('token');
-          setToken(null);
-        })
-        .finally(() => setLoading(false));
-    }
-  }, [token]);
+    // SECURITY: Clean up any tokens that might be in URL
+    cleanupTokensFromURL();
 
+    // Verify authentication with backend
+    // If we have a valid httpOnly cookie, this will succeed
+    const verifyAuth = async () => {
+      try {
+        const res = await api.get('/auth/me');
+        // Ensure is_admin is a boolean
+        const userData = { ...res.data, is_admin: !!res.data.is_admin };
+        setUser(userData);
+      } catch (error) {
+        // SECURITY: Clear any potentially stored tokens
+        localStorage.removeItem('token');
+        localStorage.removeItem('jwt');
+        sessionStorage.removeItem('token');
+        setUser(null);
+        
+        secureLog.debug('Not authenticated');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    verifyAuth();
+  }, []);
+
+  /**
+   * Login with email and password
+   * SECURITY: 
+   * - Backend sets httpOnly cookie with token
+   * - Frontend never receives token
+   * - Frontend never stores token
+   */
   const login = async (email: string, password: string) => {
-    const res = await api.post('/auth/login', { email, password });
-    localStorage.setItem('token', res.data.token);
-    setToken(res.data.token);
-    // Ensure is_admin is a boolean
-    const userData = { ...res.data.user, is_admin: !!res.data.user.is_admin };
-    setUser(userData);
+    try {
+      const res = await api.post('/auth/login', { email, password });
+      
+      // SECURITY: Ignore any token in response (should be in httpOnly cookie instead)
+      if (res.data.token) {
+        secureLog.warn('Token received in response. It should be in httpOnly cookie.');
+      }
+      
+      // User data is safe to store
+      const userData = { ...res.data.user, is_admin: !!res.data.user.is_admin };
+      setUser(userData);
+    } catch (error) {
+      // SECURITY: Clear any stored tokens on login failure
+      localStorage.removeItem('token');
+      localStorage.removeItem('jwt');
+      sessionStorage.removeItem('token');
+      throw error;
+    }
   };
 
+  /**
+   * Register new user
+   */
   const register = async (username: string, email: string, password: string) => {
     const res = await api.post('/auth/register', { username, email, password });
     return res.data.message;
   };
 
-  const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
-    setUser(null);
+  /**
+   * Logout user
+   * SECURITY: Backend clears httpOnly cookie
+   */
+  const logout = async () => {
+    try {
+      await api.post('/auth/logout');
+    } catch (error) {
+      secureLog.debug('Logout request failed');
+    } finally {
+      // SECURITY: Clear any potentially stored tokens
+      localStorage.removeItem('token');
+      localStorage.removeItem('jwt');
+      localStorage.removeItem('user');
+      localStorage.removeItem('auth_token');
+      sessionStorage.removeItem('token');
+      sessionStorage.removeItem('jwt');
+      
+      setUser(null);
+    }
   };
 
-  const updateUser = (u: User) => setUser(u);
+  const updateUser = (u: User) => {
+    // SECURITY: Never store sensitive user data that shouldn't be exposed
+    setUser(u);
+  };
+
+  const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, token, login, register, logout, loading, updateUser }}>
+    <AuthContext.Provider value={{ user, isAuthenticated, login, register, logout, loading, updateUser }}>
       {children}
     </AuthContext.Provider>
   );
