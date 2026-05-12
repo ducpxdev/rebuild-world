@@ -348,6 +348,47 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/stories/:id/latest-comments — Get 7 most recent comments from story and chapters
+router.get('/:id/latest-comments', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Fetch latest story comments (comment on story itself)
+    const storyCommentsResult = await pool.query(`
+      SELECT sc.id, sc.story_id, sc.user_id, sc.content, sc.created_at,
+             u.username, u.avatar_url, u.is_admin,
+             'story' as comment_type, NULL::TEXT as chapter_number, NULL::TEXT as chapter_id
+      FROM story_comments sc
+      JOIN users u ON sc.user_id = u.id
+      WHERE sc.story_id = $1
+      ORDER BY sc.created_at DESC
+    `, [id]);
+
+    // Fetch latest chapter comments
+    const chapterCommentsResult = await pool.query(`
+      SELECT c.id, c.chapter_id, c.user_id, c.content, c.created_at,
+             u.username, u.avatar_url, u.is_admin,
+             'chapter' as comment_type, ch.chapter_number, ch.id
+      FROM comments c
+      JOIN users u ON c.user_id = u.id
+      JOIN chapters ch ON c.chapter_id = ch.id
+      WHERE ch.story_id = $1
+      ORDER BY c.created_at DESC
+    `, [id]);
+
+    // Combine and sort by created_at descending, take top 7
+    const allComments = [
+      ...storyCommentsResult.rows.map(c => ({ ...c, type: 'story' })),
+      ...chapterCommentsResult.rows.map(c => ({ ...c, type: 'chapter' }))
+    ].sort((a, b) => b.created_at - a.created_at).slice(0, 7);
+
+    res.json({ latestComments: allComments });
+  } catch (error) {
+    console.error('Error fetching latest comments:', error);
+    res.status(500).json({ error: 'Failed to fetch latest comments' });
+  }
+});
+
 // DELETE /api/stories/:id/comments/:commentId — admin only
 router.delete('/:id/comments/:commentId', authenticateToken, requireAdmin, async (req, res) => {
   try {
