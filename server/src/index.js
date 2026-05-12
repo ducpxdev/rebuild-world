@@ -17,6 +17,7 @@ import volumeRoutes from './routes/volumes.js';
 import userRoutes from './routes/users.js';
 import imagesRoutes from './routes/images.js';
 import notificationRoutes from './routes/notifications.js';
+import commentRoutes from './routes/comments.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -55,6 +56,7 @@ app.use('/api/stories/:storyId/chapters', chapterRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/images', imagesRoutes);
 app.use('/api/notifications', notificationRoutes);
+app.use('/api/comments', commentRoutes);
 
 app.get('/api/health', (req, res) => {
   res.json({ 

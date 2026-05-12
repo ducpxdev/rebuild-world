@@ -373,6 +373,50 @@ export async function initDb() {
       }
     }
 
+    // Create comment_likes table for liking comments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS comment_likes (
+        id TEXT PRIMARY KEY,
+        comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
+        UNIQUE(comment_id, user_id)
+      )
+    `);
+
+    // Create story_comment_likes table for liking story comments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS story_comment_likes (
+        id TEXT PRIMARY KEY,
+        story_comment_id TEXT NOT NULL REFERENCES story_comments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW()),
+        UNIQUE(story_comment_id, user_id)
+      )
+    `);
+
+    // Create comment_replies table for replying to comments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS comment_replies (
+        id TEXT PRIMARY KEY,
+        comment_id TEXT NOT NULL REFERENCES comments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW())
+      )
+    `);
+
+    // Create story_comment_replies table for replying to story comments
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS story_comment_replies (
+        id TEXT PRIMARY KEY,
+        story_comment_id TEXT NOT NULL REFERENCES story_comments(id) ON DELETE CASCADE,
+        user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        content TEXT NOT NULL,
+        created_at BIGINT DEFAULT EXTRACT(epoch FROM NOW())
+      )
+    `);
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {

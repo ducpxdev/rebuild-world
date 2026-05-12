@@ -4,6 +4,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../lib/api';
 import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield } from 'lucide-react';
+import CommentInteractions from '../components/CommentInteractions';
 
 interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; }
 interface ChapterData {
@@ -325,6 +326,9 @@ export default function ChapterPage() {
                       )}
                     </div>
                     <p className="text-sm text-slate-400 mt-1">{c.content}</p>
+                    <div className="mt-2">
+                      <CommentInteractions commentId={c.id} isStoryComment={false} />
+                    </div>
                   </div>
                 </div>
               ))}
