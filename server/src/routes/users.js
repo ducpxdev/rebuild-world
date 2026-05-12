@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
-import { upload } from '../middleware/upload.js';
+import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
 
 const router = Router();
 
@@ -42,10 +42,11 @@ router.get('/:username/profile', optionalAuth, async (req, res) => {
 });
 
 // PUT /api/users/me — update own profile
-router.put('/me', authenticateToken, upload.single('avatar'), async (req, res) => {
+router.put('/me', authenticateToken, uploadDb.single('avatar'), saveUploadedFiles, async (req, res) => {
   try {
     const { bio } = req.body;
-    const avatar_url = req.file ? `/uploads/${req.file.filename}` : undefined;
+    // Store the API image URL instead of disk path
+    const avatar_url = req.file && req.uploadedToDb ? `/api/images/${req.file.imageId}` : undefined;
 
     const currentResult = await pool.query('SELECT * FROM users WHERE id = $1', [req.user.id]);
     const current = currentResult.rows[0];
