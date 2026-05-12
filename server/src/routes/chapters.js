@@ -337,9 +337,9 @@ router.get('/:number/latest-comments', async (req, res) => {
       return res.status(400).json({ error: 'Invalid chapter number' });
     }
 
-    // Get the chapter ID first
+    // Get the chapter with title
     const chapterResult = await pool.query(`
-      SELECT id FROM chapters WHERE story_id = $1 AND chapter_number = $2
+      SELECT id, title FROM chapters WHERE story_id = $1 AND chapter_number = $2
     `, [req.params.storyId, chapterNumber]);
     
     if (chapterResult.rows.length === 0) {
@@ -361,7 +361,8 @@ router.get('/:number/latest-comments', async (req, res) => {
     const latestComments = commentsResult.rows.map(c => ({
       ...c,
       type: 'chapter',
-      chapter_number: chapterNumber
+      chapter_number: chapterNumber,
+      chapter_title: chapter.title
     }));
 
     res.json({ latestComments });

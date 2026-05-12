@@ -357,18 +357,18 @@ router.get('/:id/latest-comments', async (req, res) => {
     const storyCommentsResult = await pool.query(`
       SELECT sc.id, sc.story_id, sc.user_id, sc.content, sc.created_at,
              u.username, u.avatar_url, u.is_admin,
-             'story' as comment_type, NULL::TEXT as chapter_number, NULL::TEXT as chapter_id
+             'story' as comment_type, NULL::INTEGER as chapter_number, NULL::TEXT as chapter_id, NULL::TEXT as chapter_title
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.story_id = $1
       ORDER BY sc.created_at DESC
     `, [id]);
 
-    // Fetch latest chapter comments
+    // Fetch latest chapter comments with chapter title
     const chapterCommentsResult = await pool.query(`
       SELECT c.id, c.chapter_id, c.user_id, c.content, c.created_at,
              u.username, u.avatar_url, u.is_admin,
-             'chapter' as comment_type, ch.chapter_number, ch.id
+             'chapter' as comment_type, ch.chapter_number, ch.id as chapter_id, ch.title as chapter_title
       FROM comments c
       JOIN users u ON c.user_id = u.id
       JOIN chapters ch ON c.chapter_id = ch.id

@@ -8,6 +8,7 @@ interface LatestComment {
   created_at: number;
   type: 'story' | 'chapter';
   chapter_number?: number;
+  chapter_title?: string;
 }
 
 interface LatestCommentsProps {
@@ -30,6 +31,15 @@ export default function LatestComments({ storyId, latestComments, isLoading }: L
     if (diffHours < 24) return `${diffHours}h ago`;
     if (diffDays < 7) return `${diffDays}d ago`;
     return date.toLocaleDateString();
+  };
+
+  const getLocationText = (comment: LatestComment) => {
+    if (comment.type === 'story') {
+      return 'on story';
+    } else if (comment.type === 'chapter') {
+      return `in Ch. ${comment.chapter_number}: ${comment.chapter_title || 'Untitled'}`;
+    }
+    return '';
   };
 
   return (
@@ -77,17 +87,12 @@ export default function LatestComments({ storyId, latestComments, isLoading }: L
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1">
-                    <p className="text-xs font-medium text-slate-300 truncate">
-                      {comment.username}
-                    </p>
-                    {comment.type === 'chapter' && (
-                      <span className="text-xs text-slate-500 whitespace-nowrap">
-                        Ch. {comment.chapter_number}
-                      </span>
-                    )}
+                  <div className="text-xs font-medium text-slate-300">
+                    <span className="text-slate-300">{comment.username}</span>
+                    {' '}
+                    <span className="text-slate-500">has commented {getLocationText(comment)}</span>
                   </div>
-                  <p className="text-xs text-slate-400 line-clamp-2 break-words">
+                  <p className="text-xs text-slate-400 line-clamp-2 break-words mt-1">
                     {comment.content}
                   </p>
                   <p className="text-xs text-slate-600 mt-1">
