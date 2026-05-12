@@ -1,6 +1,20 @@
 import { Link } from 'react-router-dom';
 import { Eye, Star, BookOpen, Image } from 'lucide-react';
 
+const TAG_CATEGORIES = {
+  light_novel: { label: 'Light Novel', color: 'bg-red-500/90' },
+  web_novel: { label: 'Web Novel', color: 'bg-yellow-500/90' },
+  manga: { label: 'Manga', color: 'bg-amber-500/90' },
+};
+
+const getCategoryBadge = (tags?: string) => {
+  if (!tags) return null;
+  const tagArray = tags.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '_'));
+  const firstTag = tagArray[0];
+  const category = TAG_CATEGORIES[firstTag as keyof typeof TAG_CATEGORIES];
+  return category || null;
+};
+
 interface StoryCardProps {
   id: string;
   title: string;
@@ -13,15 +27,18 @@ interface StoryCardProps {
   rating_count?: number;
   chapter_count: number;
   status?: string;
+  tags?: string;
   isLatestMode?: boolean;
   latestChapterNumber?: number;
   latestChapterTitle?: string;
 }
 
-export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status, isLatestMode, latestChapterNumber, latestChapterTitle }: StoryCardProps) {
+export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status, tags, isLatestMode, latestChapterNumber, latestChapterTitle }: StoryCardProps) {
   const linkTo = isLatestMode && latestChapterNumber !== undefined
     ? `/story/${id}/chapter/${latestChapterNumber}`
     : `/story/${id}`;
+
+  const categoryBadge = getCategoryBadge(tags);
 
   return (
     <Link to={linkTo} className="group block bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden hover:border-cyan-500/30 hover:-translate-y-1 transition-all duration-300 hover:shadow-[0_0_30px_rgba(0,212,255,0.08)]">
@@ -40,10 +57,16 @@ export default function StoryCard({ id, title, cover_url, type, genre, author_na
         )}
         {/* Gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-        {/* Type badge */}
-        <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded text-xs font-semibold tracking-wide uppercase ${type === 'comic' ? 'bg-amber-500/90 text-black' : 'bg-cyan-500/90 text-black'}`}>
-          {type === 'comic' ? 'Comic' : 'Text'}
-        </span>
+        {/* Category badge */}
+        {categoryBadge ? (
+          <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded text-xs font-semibold tracking-wide uppercase ${categoryBadge.color} text-black`}>
+            {categoryBadge.label}
+          </span>
+        ) : (
+          <span className={`absolute top-3 left-3 px-2.5 py-0.5 rounded text-xs font-semibold tracking-wide uppercase ${type === 'comic' ? 'bg-amber-500/90 text-black' : 'bg-cyan-500/90 text-black'}`}>
+            {type === 'comic' ? 'Comic' : 'Novel'}
+          </span>
+        )}
         {status && status !== 'ongoing' && (
           <span className={`absolute top-3 right-3 px-2.5 py-0.5 rounded text-xs font-semibold ${status === 'completed' ? 'bg-emerald-500/90 text-black' : 'bg-amber-500/90 text-black'}`}>
             {status}

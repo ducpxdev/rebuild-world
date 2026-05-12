@@ -5,9 +5,9 @@ import api from '../lib/api';
 import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit } from 'lucide-react';
 
 const TAG_CATEGORIES = {
-  light_novel: { label: 'Light Novel', color: 'red' },
-  web_novel: { label: 'Web Novel', color: 'yellow' },
-  manga: { label: 'Manga', color: 'orange' },
+  light_novel: { label: 'Light Novel', color: 'red', badgeColor: 'bg-red-500' },
+  web_novel: { label: 'Web Novel', color: 'yellow', badgeColor: 'bg-yellow-500' },
+  manga: { label: 'Manga', color: 'orange', badgeColor: 'bg-amber-500' },
 };
 
 const getTagColor = (tag: string) => {
@@ -21,6 +21,14 @@ const getTagColor = (tag: string) => {
     orange: { bg: 'bg-amber-500/10', border: 'border-amber-500/20', text: 'text-amber-400' },
   };
   return colorMap[tagInfo.color as keyof typeof colorMap];
+};
+
+const getCategoryBadge = (tags?: string) => {
+  if (!tags) return null;
+  const tagArray = tags.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '_'));
+  const firstTag = tagArray[0];
+  const category = TAG_CATEGORIES[firstTag as keyof typeof TAG_CATEGORIES];
+  return category || null;
 };
 
 interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
@@ -656,9 +664,18 @@ export default function StoryPage() {
                   </div>
                 )}
                 {/* Type badge on cover */}
-                <span className={`absolute top-3 left-3 px-2.5 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${story.type === 'comic' ? 'bg-amber-500 text-black' : 'bg-cyan-500 text-black'}`}>
-                  {story.type === 'comic' ? 'Comic' : 'Novel'}
-                </span>
+                {(() => {
+                  const categoryBadge = getCategoryBadge(story.tags);
+                  return categoryBadge ? (
+                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${categoryBadge.badgeColor} text-black`}>
+                      {categoryBadge.label}
+                    </span>
+                  ) : (
+                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${story.type === 'comic' ? 'bg-amber-500 text-black' : 'bg-cyan-500 text-black'}`}>
+                      {story.type === 'comic' ? 'Comic' : 'Novel'}
+                    </span>
+                  );
+                })()}
               </div>
             </div>
 
@@ -1105,21 +1122,6 @@ export default function StoryPage() {
                 </p>
               )}
             </div>
-
-            {/* Tags */}
-            {tags.length > 0 && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
-                <h3 className="text-sm font-bold text-slate-300 mb-3 font-['Rajdhani'] tracking-wide uppercase">Categories</h3>
-                <div className="flex flex-wrap gap-1.5">
-                  {tags.map(t => {
-                    const colors = getTagColor(t);
-                    return (
-                      <span key={t} className={`px-2.5 py-1 ${colors.bg} ${colors.text} text-xs rounded border ${colors.border}`}>{t}</span>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </div>
         </div>
       </div>
