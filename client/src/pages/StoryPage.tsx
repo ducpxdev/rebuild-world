@@ -861,7 +861,7 @@ export default function StoryPage() {
                               </span>
                             </div>
                             <h3 className="font-medium text-slate-200 group-hover:text-cyan-400 transition truncate">
-                              Chapter {chapter.chapter_number}: {chapter.title}
+                              {chapter.title}
                             </h3>
                             <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
                               <span className="flex items-center gap-1">
