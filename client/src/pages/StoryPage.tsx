@@ -737,7 +737,7 @@ export default function StoryPage() {
                   </Link>
                 )}
                 {user && (
-                  <button onClick={toggleBookmark} className={`flex items-center gap-2 px-5 py-3 rounded-lg border font-medium transition text-sm ${bookmarked ? 'bg-pink-500/10 border-pink-500/30 text-pink-400 hover:bg-pink-500/15' : 'border-slate-700 text-slate-400 hover:border-pink-500/30 hover:text-pink-400'}`}>
+                  <button onClick={toggleBookmark} className={`flex items-center gap-2 px-5 py-3 rounded-lg border font-medium transition text-sm ${bookmarked ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/15' : 'border-slate-700 text-slate-400 hover:border-red-500/30 hover:text-red-400'}`}>
                     <Heart className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} /> {bookmarked ? 'Saved' : 'Save'}
                   </button>
                 )}
@@ -761,7 +761,7 @@ export default function StoryPage() {
           <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-800/60">
             <div className="flex flex-col items-center py-4 gap-1">
               <div className="flex items-center gap-1.5">
-                <Heart className="w-4 h-4 text-pink-400" />
+                <Heart className="w-4 h-4 text-red-400" />
                 <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{bookmarkCount.toLocaleString()}</span>
               </div>
               <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Favorites</span>
