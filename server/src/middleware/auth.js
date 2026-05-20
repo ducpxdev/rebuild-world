@@ -32,8 +32,14 @@ export async function requireAdmin(req, res, next) {
 }
 
 export function optionalAuth(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
+  // SECURITY: Check for token in httpOnly cookie first (preferred method)
+  let token = req.cookies?.auth_token;
+  
+  // Fall back to Authorization header if cookie not present
+  if (!token) {
+    const authHeader = req.headers['authorization'];
+    token = authHeader && authHeader.split(' ')[1];
+  }
 
   if (token) {
     try {
