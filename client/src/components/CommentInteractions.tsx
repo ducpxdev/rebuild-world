@@ -1,7 +1,16 @@
-import { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Trash2, Send, Pin } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Heart, MessageCircle, Trash2, Send, Pin, CornerDownRight } from 'lucide-react';
 import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
+
+function timeAgo(ts: number): string {
+  const diff = Math.floor(Date.now() / 1000 - ts);
+  if (diff < 60) return 'just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+  return new Date(ts * 1000).toLocaleDateString();
+}
 
 interface Reply {
   id: string;
@@ -29,6 +38,7 @@ export default function CommentInteractions({
   onPinChange,
 }: CommentDisplayProps) {
   const { user } = useAuth();
+  const replyInputRef = useRef<HTMLInputElement>(null);
 
   // Like state
   const [likes, setLikes] = useState(0);
@@ -38,10 +48,13 @@ export default function CommentInteractions({
   // Reply state
   const [replyCount, setReplyCount] = useState(0);
   const [replies, setReplies] = useState<Reply[]>([]);
-  const [showReplies, setShowReplies] = useState(true);
+  const [showReplies, setShowReplies] = useState(false);
+  const [repliesLoading, setRepliesLoading] = useState(false);
   const [repliesLoaded, setRepliesLoaded] = useState(false);
+  const [showReplyForm, setShowReplyForm] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+  const [replyError, setReplyError] = useState('');
 
   // Pin state
   const [isPinning, setIsPinning] = useState(false);
@@ -59,36 +72,57 @@ export default function CommentInteractions({
     ? `/comments/story/${commentId}/like`
     : `/comments/${commentId}/like`;
 
-  // On mount: load interaction status (likes, user liked, reply count) and
-  // eagerly fetch replies so they are visible immediately.
+  // On mount: load only counts — replies are lazy-loaded on first expand.
   useEffect(() => {
     let cancelled = false;
-
-    const init = async () => {
-      try {
-        const [statusRes, repliesRes] = await Promise.all([
-          api.get(likeCountEndpoint),
-          api.get(repliesEndpoint),
-        ]);
-
-        if (cancelled) return;
-
-        setLikes(statusRes.data.likeCount ?? 0);
-        setIsLiked(statusRes.data.userLiked ?? false);
-        setReplyCount(statusRes.data.replyCount ?? 0);
-
-        const loadedReplies: Reply[] = repliesRes.data.replies ?? [];
-        setReplies(loadedReplies);
-        setReplyCount(loadedReplies.length);
-        setRepliesLoaded(true);
-      } catch (error) {
-        console.error('Error initialising comment interactions:', error);
-      }
-    };
-
-    init();
+    api.get(likeCountEndpoint).then(res => {
+      if (cancelled) return;
+      setLikes(res.data.likeCount ?? 0);
+      setIsLiked(res.data.userLiked ?? false);
+      setReplyCount(res.data.replyCount ?? 0);
+    }).catch(() => {});
     return () => { cancelled = true; };
   }, [commentId, isStoryComment]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch replies from the server (idempotent — skips if already loaded).
+  const ensureRepliesLoaded = async () => {
+    if (repliesLoaded) return;
+    setRepliesLoading(true);
+    try {
+      const res = await api.get(repliesEndpoint);
+      const loaded: Reply[] = res.data.replies ?? [];
+      setReplies(loaded);
+      setReplyCount(loaded.length);
+      setRepliesLoaded(true);
+    } catch {
+      setRepliesLoaded(true); // Don't block the UI on error.
+    } finally {
+      setRepliesLoading(false);
+    }
+  };
+
+  // Toggle the replies list, fetching on first open.
+  const toggleReplies = async () => {
+    if (!showReplies) await ensureRepliesLoaded();
+    setShowReplies(v => !v);
+  };
+
+  // Open the reply form, expanding the replies list if needed.
+  const openReplyForm = async (prefill = '') => {
+    if (!showReplies) {
+      await ensureRepliesLoaded();
+      setShowReplies(true);
+    }
+    setReplyText(prefill);
+    setShowReplyForm(true);
+    setTimeout(() => replyInputRef.current?.focus(), 50);
+  };
+
+  const cancelReplyForm = () => {
+    setShowReplyForm(false);
+    setReplyText('');
+    setReplyError('');
+  };
 
   const handleLike = async () => {
     if (!user || likeLoading) return;
@@ -136,18 +170,19 @@ export default function CommentInteractions({
     }
   };
 
-  const handleReply = async (e: React.FormEvent) => {
+  const handleSubmitReply = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !replyText.trim() || isSubmittingReply) return;
     setIsSubmittingReply(true);
+    setReplyError('');
     try {
-      const res = await api.post(repliesEndpoint, { content: replyText });
+      const res = await api.post(repliesEndpoint, { content: replyText.trim() });
       setReplies(prev => [...prev, res.data]);
       setReplyCount(prev => prev + 1);
       setReplyText('');
-      setShowReplies(true);
-    } catch (error) {
-      console.error('Error posting reply:', error);
+      setShowReplyForm(false);
+    } catch (err: any) {
+      setReplyError(err.response?.data?.error || 'Failed to post reply. Please try again.');
     } finally {
       setIsSubmittingReply(false);
     }
@@ -169,9 +204,9 @@ export default function CommentInteractions({
 
   return (
     <div className="space-y-2">
-      {/* Action bar */}
+      {/* ── Action bar ── */}
       <div className="flex items-center gap-4 text-slate-400 text-sm">
-        {/* Like button */}
+        {/* Like */}
         <button
           onClick={isLiked ? handleUnlike : handleLike}
           disabled={!user || likeLoading}
@@ -184,17 +219,29 @@ export default function CommentInteractions({
           {likes > 0 && <span className="text-xs tabular-nums">{likes}</span>}
         </button>
 
-        {/* Reply toggle button */}
+        {/* Replies toggle — shows count, expands thread */}
         <button
-          onClick={() => setShowReplies(v => !v)}
-          className="flex items-center gap-1.5 hover:text-cyan-400 transition-colors"
+          onClick={toggleReplies}
+          className={`flex items-center gap-1.5 transition-colors ${
+            showReplies ? 'text-cyan-400' : 'hover:text-cyan-400'
+          }`}
           title={showReplies ? 'Hide replies' : 'Show replies'}
         >
           <MessageCircle className="w-4 h-4" />
           {replyCount > 0 && <span className="text-xs tabular-nums">{replyCount}</span>}
         </button>
 
-        {/* Pin button (story author only) */}
+        {/* Reply action — opens the reply form */}
+        {user && (
+          <button
+            onClick={() => openReplyForm()}
+            className="text-xs hover:text-cyan-400 transition-colors"
+          >
+            Reply
+          </button>
+        )}
+
+        {/* Pin (story author only) */}
         {storyAuthorId && user?.id === storyAuthorId && (
           <button
             onClick={handlePin}
@@ -209,73 +256,126 @@ export default function CommentInteractions({
         )}
       </div>
 
-      {/* Replies section — always rendered once loaded, toggled by button */}
+      {/* ── Replies section ── */}
       {showReplies && (
-        <div className="pl-4 border-l-2 border-slate-700/60 space-y-2">
-          {/* Reply form */}
-          {user && (
-            <form onSubmit={handleReply} className="flex gap-2 pt-1">
-              <input
-                type="text"
-                value={replyText}
-                onChange={e => setReplyText(e.target.value)}
-                placeholder="Write a reply…"
-                className="flex-1 px-3 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded text-sm text-slate-200 placeholder-slate-600 focus:border-cyan-500/50 outline-none"
-              />
-              <button
-                type="submit"
-                disabled={!replyText.trim() || isSubmittingReply}
-                className="px-3 py-1.5 bg-cyan-500 text-black rounded hover:bg-cyan-400 transition disabled:opacity-50 flex items-center gap-1"
-              >
-                <Send className="w-3.5 h-3.5" />
-              </button>
-            </form>
+        <div className="pl-4 border-l-2 border-slate-700/60 space-y-3 pt-1">
+
+          {/* Loading spinner */}
+          {repliesLoading && (
+            <div className="flex items-center gap-2 text-xs text-slate-600 py-1">
+              <div className="w-3 h-3 border border-slate-600 border-t-cyan-500/60 rounded-full animate-spin" />
+              Loading replies…
+            </div>
           )}
 
           {/* Replies list */}
-          {repliesLoaded && (
-            <div className="space-y-2">
-              {replies.length === 0 ? (
-                <p className="text-xs text-slate-600 italic">No replies yet</p>
-              ) : (
-                replies.map(reply => (
-                  <div key={reply.id} className="flex gap-2 bg-slate-900/30 rounded-lg px-3 py-2">
-                    <div className="shrink-0 mt-0.5">
-                      {reply.avatar_url ? (
-                        <img src={reply.avatar_url} alt={reply.username} className="w-6 h-6 rounded-full object-cover" />
-                      ) : (
-                        <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold">
-                          {reply.username[0]?.toUpperCase()}
-                        </div>
-                      )}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-xs font-semibold text-slate-300">
-                          {reply.username}
-                          {reply.is_admin && <span className="ml-1 text-amber-400">✨</span>}
-                        </span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[11px] text-slate-600">
-                            {new Date(reply.created_at * 1000).toLocaleDateString()}
-                          </span>
-                          {(user?.id === reply.user_id || user?.is_admin) && (
-                            <button
-                              onClick={() => handleDeleteReply(reply.id)}
-                              className="text-slate-600 hover:text-red-400 transition"
-                              title="Delete reply"
-                            >
-                              <Trash2 className="w-3 h-3" />
-                            </button>
-                          )}
-                        </div>
+          {!repliesLoading && repliesLoaded && replies.length > 0 && (
+            <div className="space-y-1.5">
+              {replies.map(reply => (
+                <div
+                  key={reply.id}
+                  className="group flex gap-2 rounded-lg px-3 py-2 bg-slate-900/30 hover:bg-slate-900/50 transition"
+                >
+                  {/* Avatar */}
+                  <div className="shrink-0 mt-0.5">
+                    {reply.avatar_url ? (
+                      <img
+                        src={reply.avatar_url}
+                        alt={reply.username}
+                        className="w-6 h-6 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold">
+                        {reply.username[0]?.toUpperCase()}
                       </div>
-                      <p className="text-sm text-slate-400 mt-0.5 break-words">{reply.content}</p>
-                    </div>
+                    )}
                   </div>
-                ))
-              )}
+
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`text-xs font-semibold ${
+                            reply.is_admin
+                              ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500'
+                              : 'text-slate-300'
+                          }`}
+                        >
+                          {reply.username}
+                          {reply.is_admin && <span className="ml-1">✨</span>}
+                        </span>
+                        <span
+                          className="text-[11px] text-slate-600"
+                          title={new Date(reply.created_at * 1000).toLocaleString()}
+                        >
+                          {timeAgo(reply.created_at)}
+                        </span>
+                      </div>
+
+                      {/* Per-reply actions (visible on hover) */}
+                      <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                        {user && (
+                          <button
+                            onClick={() => openReplyForm(`@${reply.username} `)}
+                            className="flex items-center gap-0.5 text-[11px] text-slate-500 hover:text-cyan-400 transition"
+                            title={`Reply to ${reply.username}`}
+                          >
+                            <CornerDownRight className="w-3 h-3" />
+                          </button>
+                        )}
+                        {(user?.id === reply.user_id || user?.is_admin) && (
+                          <button
+                            onClick={() => handleDeleteReply(reply.id)}
+                            className="text-slate-600 hover:text-red-400 transition"
+                            title="Delete reply"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    <p className="text-sm text-slate-400 mt-0.5 break-words">{reply.content}</p>
+                  </div>
+                </div>
+              ))}
             </div>
+          )}
+
+          {/* Reply form */}
+          {showReplyForm && user && (
+            <form onSubmit={handleSubmitReply} className="space-y-1.5">
+              <div className="flex gap-2">
+                <input
+                  ref={replyInputRef}
+                  type="text"
+                  value={replyText}
+                  onChange={e => setReplyText(e.target.value)}
+                  placeholder="Write a reply…"
+                  maxLength={1000}
+                  className="flex-1 px-3 py-1.5 bg-slate-900/50 border border-slate-700/50 rounded text-sm text-slate-200 placeholder-slate-600 focus:border-cyan-500/50 outline-none"
+                />
+                <button
+                  type="submit"
+                  disabled={!replyText.trim() || isSubmittingReply}
+                  className="px-3 py-1.5 bg-cyan-500 text-black rounded hover:bg-cyan-400 transition disabled:opacity-50 flex items-center gap-1"
+                  title="Post reply"
+                >
+                  <Send className="w-3.5 h-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={cancelReplyForm}
+                  className="px-3 py-1.5 bg-slate-800 text-slate-400 rounded hover:bg-slate-700 transition text-xs"
+                >
+                  Cancel
+                </button>
+              </div>
+              {replyError && (
+                <p className="text-xs text-red-400">{replyError}</p>
+              )}
+            </form>
           )}
         </div>
       )}
