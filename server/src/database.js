@@ -463,6 +463,18 @@ export async function initDb() {
       )
     `);
 
+    // Migration: Add username_changed_at column to users table for 30-day cooldown
+    try {
+      await pool.query(`
+        ALTER TABLE users ADD COLUMN username_changed_at BIGINT DEFAULT NULL
+      `);
+      console.log('✓ Added username_changed_at column to users table');
+    } catch (err) {
+      if (!err.message.includes('already exists')) {
+        console.error('Error adding username_changed_at column:', err.message);
+      }
+    }
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {

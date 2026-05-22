@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import StoryCard from '../components/StoryCard';
 import api from '../lib/api';
-import { User, Calendar, BookOpen, Users, UserPlus, UserCheck, Shield, Upload, X } from 'lucide-react';
+import { User, Calendar, BookOpen, Users, UserPlus, UserCheck, Shield, Upload, X, Pencil, Check } from 'lucide-react';
 
 interface Story {
   id: string; title: string; cover_url?: string; type: 'text' | 'comic';
@@ -19,7 +19,8 @@ interface Profile {
 
 export default function ProfilePage() {
   const { username } = useParams<{ username: string }>();
-  const { user } = useAuth();
+  const navigate = useNavigate();
+  const { user, updateUser } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [following, setFollowing] = useState(false);
   const [followerCount, setFollowerCount] = useState(0);
@@ -28,6 +29,13 @@ export default function ProfilePage() {
   const [sizeWarning, setSizeWarning] = useState('');
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [uploadError, setUploadError] = useState('');
+
+  // Username change state
+  const [editingUsername, setEditingUsername] = useState(false);
+  const [newUsername, setNewUsername] = useState('');
+  const [usernameError, setUsernameError] = useState('');
+  const [usernameSuccess, setUsernameSuccess] = useState('');
+  const [savingUsername, setSavingUsername] = useState(false);
 
   useEffect(() => {
     api.get(`/users/${username}/profile`).then(r => {
@@ -96,6 +104,41 @@ export default function ProfilePage() {
     }
   };
 
+  const handleUsernameEdit = () => {
+    setNewUsername(profile?.username ?? '');
+    setUsernameError('');
+    setUsernameSuccess('');
+    setEditingUsername(true);
+  };
+
+  const handleUsernameCancel = () => {
+    setEditingUsername(false);
+    setUsernameError('');
+    setUsernameSuccess('');
+  };
+
+  const handleUsernameSave = async () => {
+    if (!newUsername.trim()) return;
+    setSavingUsername(true);
+    setUsernameError('');
+    setUsernameSuccess('');
+    try {
+      const res = await api.patch('/users/me/username', { username: newUsername.trim() });
+      const updated = res.data.username as string;
+      setProfile(prev => prev ? { ...prev, username: updated } : null);
+      updateUser(user ? { ...user, username: updated } : user!);
+      setUsernameSuccess('Username updated successfully!');
+      setEditingUsername(false);
+      // Navigate to the new profile URL so the URL stays in sync
+      navigate(`/profile/${updated}`, { replace: true });
+    } catch (err) {
+      const error = err as { response?: { data?: { error: string; remaining_days?: number } } };
+      setUsernameError(error.response?.data?.error || 'Failed to update username');
+    } finally {
+      setSavingUsername(false);
+    }
+  };
+
   if (!profile) return (
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="w-10 h-10 border-4 border-slate-700 border-t-cyan-500 rounded-full animate-spin" />
@@ -144,20 +187,56 @@ export default function ProfilePage() {
             )}
             <div className="flex-1 pb-1">
               <div className="flex items-center gap-3 flex-wrap">
-                <h1 className={`text-2xl font-bold font-['Rajdhani'] tracking-wide ${
-                  profile.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500 animate-pulse' : 'text-slate-100'
-                }`}>
-                  {profile.username}
-                  {profile.is_admin && (
-                    <span className="inline-block ml-2 text-lg animate-bounce" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>
-                  )}
-                </h1>
+                {editingUsername && user && user.id === profile.id ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newUsername}
+                      onChange={e => setNewUsername(e.target.value)}
+                      onKeyDown={e => { if (e.key === 'Enter') handleUsernameSave(); if (e.key === 'Escape') handleUsernameCancel(); }}
+                      maxLength={30}
+                      autoFocus
+                      className="px-2 py-1 text-lg font-bold bg-[#1a1a2e] border border-cyan-500/50 rounded text-slate-100 focus:outline-none focus:border-cyan-400 font-['Rajdhani'] tracking-wide"
+                    />
+                    <button onClick={handleUsernameSave} disabled={savingUsername}
+                      className="p-1.5 rounded bg-cyan-500 text-black hover:bg-cyan-400 disabled:opacity-50 transition">
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <button onClick={handleUsernameCancel}
+                      className="p-1.5 rounded bg-slate-700 text-slate-300 hover:bg-slate-600 transition">
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h1 className={`text-2xl font-bold font-['Rajdhani'] tracking-wide ${
+                      profile.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500 animate-pulse' : 'text-slate-100'
+                    }`}>
+                      {profile.username}
+                      {profile.is_admin && (
+                        <span className="inline-block ml-2 text-lg animate-bounce" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>
+                      )}
+                    </h1>
+                    {user && user.id === profile.id && (
+                      <button onClick={handleUsernameEdit} title="Change username"
+                        className="p-1 rounded text-slate-500 hover:text-cyan-400 hover:bg-slate-800 transition">
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </>
+                )}
                 {profile.is_admin ? (
                   <span className="flex items-center gap-1 px-2.5 py-0.5 bg-purple-500/20 text-purple-300 text-xs font-semibold rounded border border-purple-500/30">
                     <Shield className="w-3 h-3" /> Admin
                   </span>
                 ) : null}
               </div>
+              {usernameError && (
+                <p className="mt-1 text-xs text-red-400">{usernameError}</p>
+              )}
+              {usernameSuccess && (
+                <p className="mt-1 text-xs text-cyan-400">{usernameSuccess}</p>
+              )}
               <div className="flex items-center gap-3 text-sm text-slate-500 mt-1">
                 <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />Joined {new Date(profile.created_at * 1000).toLocaleDateString()}</span>
                 <span className="flex items-center gap-1"><BookOpen className="w-3.5 h-3.5" />{profile.stories.length} stories</span>

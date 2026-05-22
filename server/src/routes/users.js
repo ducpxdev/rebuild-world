@@ -41,6 +41,69 @@ router.get('/:username/profile', optionalAuth, async (req, res) => {
   }
 });
 
+// PATCH /api/users/me/username — change own username (30-day cooldown)
+router.patch('/me/username', authenticateToken, async (req, res) => {
+  try {
+    const { username } = req.body;
+
+    if (!username || typeof username !== 'string') {
+      return res.status(400).json({ error: 'Username is required' });
+    }
+
+    const trimmed = username.trim();
+    if (trimmed.length < 3 || trimmed.length > 30) {
+      return res.status(400).json({ error: 'Username must be between 3 and 30 characters' });
+    }
+    if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+      return res.status(400).json({ error: 'Username may only contain letters, numbers, and underscores' });
+    }
+
+    const currentResult = await pool.query(
+      'SELECT username, username_changed_at FROM users WHERE id = $1',
+      [req.user.id]
+    );
+    const current = currentResult.rows[0];
+    if (!current) return res.status(404).json({ error: 'User not found' });
+
+    if (current.username.toLowerCase() !== trimmed.toLowerCase()) {
+      // Enforce 30-day cooldown
+      if (current.username_changed_at) {
+        const cooldownMs = 30 * 24 * 60 * 60 * 1000;
+        const lastChanged = Number(current.username_changed_at) * 1000;
+        const elapsed = Date.now() - lastChanged;
+        if (elapsed < cooldownMs) {
+          const remainingMs = cooldownMs - elapsed;
+          const remainingDays = Math.ceil(remainingMs / (24 * 60 * 60 * 1000));
+          return res.status(429).json({
+            error: `You must wait ${remainingDays} more day(s) before changing your username again`,
+            remaining_days: remainingDays,
+          });
+        }
+      }
+
+      // Check uniqueness
+      const takenResult = await pool.query(
+        'SELECT 1 FROM users WHERE LOWER(username) = LOWER($1) AND id != $2',
+        [trimmed, req.user.id]
+      );
+      if (takenResult.rows.length > 0) {
+        return res.status(409).json({ error: 'Username is already taken' });
+      }
+
+      const nowEpoch = Math.floor(Date.now() / 1000);
+      await pool.query(
+        'UPDATE users SET username = $1, username_changed_at = $2 WHERE id = $3',
+        [trimmed, nowEpoch, req.user.id]
+      );
+    }
+
+    res.json({ message: 'Username updated', username: trimmed });
+  } catch (error) {
+    console.error('Error updating username:', error);
+    res.status(500).json({ error: 'Failed to update username' });
+  }
+});
+
 // PUT /api/users/me — update own profile
 router.put('/me', authenticateToken, uploadDb.single('avatar'), saveUploadedFiles, async (req, res) => {
   try {
