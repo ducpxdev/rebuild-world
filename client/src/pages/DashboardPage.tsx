@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { Link } from 'react-router-dom';
 import api from '../lib/api';
-import { PenTool, Eye, Star, BookOpen, Plus, Settings, Bookmark, Image } from 'lucide-react';
+import { PenTool, Eye, Star, BookOpen, Plus, Settings, Bookmark, Image, BarChart2 } from 'lucide-react';
+import StoryAnalytics from '../components/StoryAnalytics';
 
 interface MyStory {
   id: string; title: string; cover_url?: string; type: 'text' | 'comic';
@@ -17,9 +18,10 @@ interface BookmarkItem {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState<'stories' | 'bookmarks'>('stories');
+  const [tab, setTab] = useState<'stories' | 'bookmarks' | 'analytics'>('stories');
   const [stories, setStories] = useState<MyStory[]>([]);
   const [bookmarks, setBookmarks] = useState<BookmarkItem[]>([]);
+  const [analyticsStoryId, setAnalyticsStoryId] = useState<string>('');
 
   useEffect(() => {
     api.get('/users/me/stories').then(r => setStories(r.data));
@@ -47,6 +49,14 @@ export default function DashboardPage() {
         <button onClick={() => setTab('bookmarks')}
           className={`flex items-center gap-2 px-5 py-2 rounded-md text-sm font-medium transition ${tab === 'bookmarks' ? 'bg-[#12121e] text-cyan-400 shadow-sm border border-cyan-500/20' : 'text-slate-500 hover:text-slate-300'}`}>
           <Bookmark className="w-4 h-4" /> Bookmarks ({bookmarks.length})
+        </button>
+        <button
+          onClick={() => {
+            setTab('analytics');
+            if (!analyticsStoryId && stories.length > 0) setAnalyticsStoryId(stories[0].id);
+          }}
+          className={`flex items-center gap-2 px-5 py-2 rounded-md text-sm font-medium transition ${tab === 'analytics' ? 'bg-[#12121e] text-cyan-400 shadow-sm border border-cyan-500/20' : 'text-slate-500 hover:text-slate-300'}`}>
+          <BarChart2 className="w-4 h-4" /> Analytics
         </button>
       </div>
 
@@ -120,6 +130,44 @@ export default function DashboardPage() {
                 </div>
               </Link>
             ))}
+          </div>
+        )
+      )}
+
+      {tab === 'analytics' && (
+        stories.length === 0 ? (
+          <div className="text-center py-20 bg-[#12121e] rounded-xl border border-slate-800/60">
+            <BarChart2 className="w-12 h-12 text-slate-700 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-slate-400 mb-2">No stories yet</h3>
+            <p className="text-slate-600 mb-6">Create a story to start seeing analytics.</p>
+            <Link to="/create" className="inline-flex items-center gap-2 px-6 py-2.5 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 transition font-['Rajdhani'] tracking-wide uppercase">
+              <Plus className="w-4 h-4" /> Create Story
+            </Link>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Story selector */}
+            {stories.length > 1 && (
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-slate-500 shrink-0">Story:</span>
+                <select
+                  value={analyticsStoryId}
+                  onChange={e => setAnalyticsStoryId(e.target.value)}
+                  className="flex-1 max-w-sm px-3 py-2 bg-[#12121e] border border-slate-700 rounded-lg text-sm text-slate-200 outline-none focus:border-cyan-500/50 cursor-pointer"
+                >
+                  {stories.map(s => (
+                    <option key={s.id} value={s.id}>{s.title}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            {analyticsStoryId && (
+              <StoryAnalytics
+                key={analyticsStoryId}
+                storyId={analyticsStoryId}
+                storyTitle={stories.find(s => s.id === analyticsStoryId)?.title ?? ''}
+              />
+            )}
           </div>
         )
       )}

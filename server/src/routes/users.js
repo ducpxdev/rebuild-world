@@ -215,4 +215,125 @@ router.post('/me/notifications/read', authenticateToken, async (req, res) => {
   }
 });
 
+// GET /api/users/me/analytics/:storyId — author analytics for a specific story
+router.get('/me/analytics/:storyId', authenticateToken, async (req, res) => {
+  try {
+    const { storyId } = req.params;
+    const userId = req.user.id;
+
+    // Verify the requesting user owns this story
+    const ownerCheck = await pool.query(
+      'SELECT id, title, views, rating_avg, author_id FROM stories WHERE id = $1',
+      [storyId]
+    );
+    const story = ownerCheck.rows[0];
+    if (!story) return res.status(404).json({ error: 'Story not found' });
+    if (story.author_id !== userId && !req.user.is_admin) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+
+    const [
+      viewsRes,
+      chaptersRes,
+      ratingRes,
+      followersRes,
+      commentersRes,
+      chapterCountRes,
+    ] = await Promise.all([
+      // 1. Views over time — last 30 days (fills zeros for days with no data)
+      pool.query(`
+        SELECT
+          to_char(d::date, 'YYYY-MM-DD') AS view_date,
+          COALESCE(vl.views, 0) AS views
+        FROM generate_series(
+          (CURRENT_DATE - INTERVAL '29 days')::timestamp,
+          CURRENT_DATE::timestamp,
+          INTERVAL '1 day'
+        ) AS d
+        LEFT JOIN view_logs vl
+          ON vl.story_id = $1 AND vl.view_date = d::date
+        ORDER BY d ASC
+      `, [storyId]),
+
+      // 2. Top chapters by views
+      pool.query(`
+        SELECT chapter_number, title, views
+        FROM chapters
+        WHERE story_id = $1
+        ORDER BY views DESC
+        LIMIT 10
+      `, [storyId]),
+
+      // 3. Rating trend — average rating per week for the last 12 weeks
+      pool.query(`
+        SELECT
+          to_char(date_trunc('week', to_timestamp(created_at)), 'YYYY-MM-DD') AS week_start,
+          ROUND(AVG(rating)::numeric, 2) AS avg_rating,
+          COUNT(*) AS count
+        FROM story_ratings
+        WHERE story_id = $1
+          AND created_at >= EXTRACT(epoch FROM NOW() - INTERVAL '84 days')
+        GROUP BY date_trunc('week', to_timestamp(created_at))
+        ORDER BY week_start ASC
+      `, [storyId]),
+
+      // 4. New followers per week for this story's author — last 12 weeks
+      pool.query(`
+        SELECT
+          to_char(date_trunc('week', to_timestamp(f.created_at)), 'YYYY-MM-DD') AS week_start,
+          COUNT(*) AS count
+        FROM followers f
+        WHERE f.followed_id = $1
+          AND f.created_at >= EXTRACT(epoch FROM NOW() - INTERVAL '84 days')
+        GROUP BY date_trunc('week', to_timestamp(f.created_at))
+        ORDER BY week_start ASC
+      `, [userId]),
+
+      // 5. Most active commenters across all chapters + story-level comments
+      pool.query(`
+        WITH all_comments AS (
+          SELECT c.user_id
+          FROM comments c
+          JOIN chapters ch ON c.chapter_id = ch.id
+          WHERE ch.story_id = $1
+          UNION ALL
+          SELECT sc.user_id
+          FROM story_comments sc
+          WHERE sc.story_id = $1
+        )
+        SELECT u.username, u.avatar_url, COUNT(*) AS comment_count
+        FROM all_comments ac
+        JOIN users u ON u.id = ac.user_id
+        GROUP BY u.id, u.username, u.avatar_url
+        ORDER BY comment_count DESC
+        LIMIT 10
+      `, [storyId]),
+
+      // Chapter count for summary
+      pool.query(
+        'SELECT COUNT(*) AS count FROM chapters WHERE story_id = $1',
+        [storyId]
+      ),
+    ]);
+
+    res.json({
+      story: {
+        id: story.id,
+        title: story.title,
+        views: story.views,
+        rating_avg: story.rating_avg,
+        chapter_count: parseInt(chapterCountRes.rows[0].count, 10),
+      },
+      viewsOverTime: viewsRes.rows,
+      topChapters: chaptersRes.rows,
+      ratingTrend: ratingRes.rows,
+      followersPerWeek: followersRes.rows,
+      topCommenters: commentersRes.rows,
+    });
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
+  }
+});
+
 export default router;

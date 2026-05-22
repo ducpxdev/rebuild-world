@@ -475,6 +475,16 @@ export async function initDb() {
       }
     }
 
+    // Daily view aggregation table for analytics dashboard
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS view_logs (
+        story_id TEXT NOT NULL REFERENCES stories(id) ON DELETE CASCADE,
+        view_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        views INTEGER DEFAULT 0,
+        PRIMARY KEY (story_id, view_date)
+      )
+    `);
+
     console.log('Database initialized successfully');
     return pool;
   } catch (error) {

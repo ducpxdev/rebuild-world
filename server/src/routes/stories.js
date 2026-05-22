@@ -92,8 +92,13 @@ router.get('/:id', optionalAuth, async (req, res) => {
 
     if (!story) return res.status(404).json({ error: 'Story not found' });
 
-    // Increment views
+    // Increment views and record daily log for analytics
     await pool.query('UPDATE stories SET views = views + 1 WHERE id = $1', [story.id]);
+    await pool.query(
+      `INSERT INTO view_logs (story_id, view_date, views) VALUES ($1, CURRENT_DATE, 1)
+       ON CONFLICT (story_id, view_date) DO UPDATE SET views = view_logs.views + 1`,
+      [story.id]
+    );
 
     let user_rating = 0;
     let bookmarked = false;
