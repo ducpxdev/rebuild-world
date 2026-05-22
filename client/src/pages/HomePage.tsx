@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import { BookOpen, TrendingUp, ArrowRight, Shield } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import StoryCard from '../components/StoryCard';
 import api from '../lib/api';
 
@@ -61,21 +61,6 @@ export default function HomePage() {
           <p className="text-lg text-slate-400 max-w-2xl mx-auto">
             Explore stories of survival and rebuild in a post-civilization world. Discover text stories and comics from our growing community.
           </p>
-        </div>
-
-        {/* Stats */}
-        <div className="bg-[#12121e] rounded-xl border border-slate-800/60 grid grid-cols-3 divide-x divide-slate-800/60">
-          {[
-            { icon: BookOpen, label: 'Stories', value: 'Archive' },
-            { icon: Shield, label: 'Community', value: 'Growing' },
-            { icon: TrendingUp, label: 'Access', value: 'Free' },
-          ].map((s, i) => (
-            <div key={i} className="flex flex-col items-center py-6 px-4">
-              <s.icon className="w-6 h-6 text-cyan-500/70 mb-2" />
-              <span className="text-xl font-bold text-slate-200 font-['Rajdhani']">{s.value}</span>
-              <span className="text-sm text-slate-500">{s.label}</span>
-            </div>
-          ))}
         </div>
       </section>
 
