@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
-import { authenticateToken } from '../middleware/auth.js';
+import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 
 const router = Router();
 
@@ -82,18 +82,30 @@ router.delete('/:commentId/like', authenticateToken, async (req, res) => {
   }
 });
 
-// GET /api/comments/:commentId/likes-count - Get like count for a comment
-router.get('/:commentId/likes-count', async (req, res) => {
+// GET /api/comments/:commentId/likes-count - Get like count, user liked status, and reply count
+router.get('/:commentId/likes-count', optionalAuth, async (req, res) => {
   try {
     const { commentId } = req.params;
+    const userId = req.user?.id ?? null;
 
-    const result = await pool.query(
-      'SELECT COUNT(*) as count FROM comment_likes WHERE comment_id = $1',
-      [commentId]
-    );
-    const likeCount = parseInt(result.rows[0].count, 10);
+    const [likeResult, replyResult] = await Promise.all([
+      pool.query('SELECT COUNT(*) as count FROM comment_likes WHERE comment_id = $1', [commentId]),
+      pool.query('SELECT COUNT(*) as count FROM comment_replies WHERE comment_id = $1', [commentId]),
+    ]);
 
-    res.json({ likeCount });
+    const likeCount = parseInt(likeResult.rows[0].count, 10);
+    const replyCount = parseInt(replyResult.rows[0].count, 10);
+
+    let userLiked = false;
+    if (userId) {
+      const userLikeResult = await pool.query(
+        'SELECT 1 FROM comment_likes WHERE comment_id = $1 AND user_id = $2',
+        [commentId, userId]
+      );
+      userLiked = userLikeResult.rows.length > 0;
+    }
+
+    res.json({ likeCount, userLiked, replyCount });
   } catch (error) {
     console.error('Error getting like count:', error);
     res.status(500).json({ error: 'Failed to get like count' });
@@ -299,6 +311,36 @@ router.delete('/story/:storyCommentId/like', authenticateToken, async (req, res)
   } catch (error) {
     console.error('Error unliking story comment:', error);
     res.status(500).json({ error: 'Failed to unlike comment' });
+  }
+});
+
+// GET /api/comments/story/:storyCommentId/likes-count - Get like count, user liked status, and reply count
+router.get('/story/:storyCommentId/likes-count', optionalAuth, async (req, res) => {
+  try {
+    const { storyCommentId } = req.params;
+    const userId = req.user?.id ?? null;
+
+    const [likeResult, replyResult] = await Promise.all([
+      pool.query('SELECT COUNT(*) as count FROM story_comment_likes WHERE story_comment_id = $1', [storyCommentId]),
+      pool.query('SELECT COUNT(*) as count FROM story_comment_replies WHERE story_comment_id = $1', [storyCommentId]),
+    ]);
+
+    const likeCount = parseInt(likeResult.rows[0].count, 10);
+    const replyCount = parseInt(replyResult.rows[0].count, 10);
+
+    let userLiked = false;
+    if (userId) {
+      const userLikeResult = await pool.query(
+        'SELECT 1 FROM story_comment_likes WHERE story_comment_id = $1 AND user_id = $2',
+        [storyCommentId, userId]
+      );
+      userLiked = userLikeResult.rows.length > 0;
+    }
+
+    res.json({ likeCount, userLiked, replyCount });
+  } catch (error) {
+    console.error('Error getting story comment like count:', error);
+    res.status(500).json({ error: 'Failed to get like count' });
   }
 });
 
