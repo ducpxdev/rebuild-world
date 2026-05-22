@@ -1,15 +1,22 @@
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Crosshair, PenTool, User, LogOut, Search, Menu, X, Bell } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import api from '../lib/api';
+import { useScrollDirection } from '../lib/useScrollDirection';
 
 export default function Navbar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [search, setSearch] = useState('');
   const [mobileOpen, setMobileOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
+
+  // Auto-hide the navbar on mobile only when the user is reading a chapter
+  const isChapterPage = /^\/story\/[^/]+\/chapter\/\d+/.test(location.pathname);
+  const { hidden: scrollHidden } = useScrollDirection();
+  const navbarHidden = isChapterPage && scrollHidden;
 
   useEffect(() => {
     if (user) {
@@ -37,7 +44,9 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-[#0d0d18]/90 backdrop-blur-xl border-b border-cyan-500/10 sticky top-0 z-50">
+    <nav className={`bg-[#0d0d18]/90 backdrop-blur-xl border-b border-cyan-500/10 sticky top-0 z-50 transition-transform duration-300 ease-in-out ${
+      navbarHidden ? '-translate-y-full md:translate-y-0' : 'translate-y-0'
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between items-center h-16">
           {/* Logo */}

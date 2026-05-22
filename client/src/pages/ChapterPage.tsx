@@ -6,6 +6,7 @@ import api from '../lib/api';
 import { ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield, Eye } from 'lucide-react';
 import CommentInteractions from '../components/CommentInteractions';
 import LatestComments from '../components/LatestComments';
+import { useScrollDirection } from '../lib/useScrollDirection';
 
 interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; pinned?: boolean; }
 interface ChapterData {
@@ -110,6 +111,7 @@ const calculateWordCount = (content: string | undefined): number => {
 export default function ChapterPage() {
   const { id, number } = useParams<{ id: string; number: string }>();
   const { user } = useAuth();
+  const { hidden: toolbarHidden } = useScrollDirection();
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [storyAuthorId, setStoryAuthorId] = useState<string | null>(null);
   const [comment, setComment] = useState('');
@@ -182,8 +184,10 @@ export default function ChapterPage() {
 
   return (
     <div className="min-h-screen bg-[#0a0a12]">
-      {/* Chapter nav bar */}
-      <div className="sticky top-16 z-40 bg-[#0d0d18]/90 backdrop-blur-xl border-b border-slate-800/60">
+      {/* Chapter nav bar — slides off-screen on mobile when scrolling down */}
+      <div className={`sticky top-16 z-40 bg-[#0d0d18]/90 backdrop-blur-xl border-b border-slate-800/60 transition-transform duration-300 ease-in-out ${
+        toolbarHidden ? '-translate-y-[7rem] md:translate-y-0' : 'translate-y-0'
+      }`}>
         <div className="max-w-6xl mx-auto px-4 flex items-center justify-between h-12">
           <Link to={`/story/${id}`} className="text-sm text-slate-500 hover:text-cyan-400 transition truncate max-w-[40%]">
             ← {chapter.story_title}
