@@ -135,6 +135,22 @@ export default function StoryPage() {
   // Latest chapters state
   const [showLatestChapters, setShowLatestChapters] = useState(true);
 
+  // Reading progress (persisted in localStorage by ChapterPage)
+  const [readingProgress, setReadingProgress] = useState<{ chapterNumber: number; title: string } | null>(null);
+
+  useEffect(() => {
+    if (!id) return;
+    try {
+      const saved = localStorage.getItem(`rw_progress_${id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed?.chapterNumber) setReadingProgress(parsed);
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }, [id]);
+
   useEffect(() => {
     const loadStory = async () => {
       try {
@@ -734,6 +750,16 @@ export default function StoryPage() {
                 {story.chapters.length > 0 && (
                   <Link to={`/story/${story.id}/chapter/1`} className="flex items-center gap-2 px-7 py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 transition shadow-[0_0_25px_rgba(0,212,255,0.25)] font-['Rajdhani'] tracking-wide uppercase text-sm">
                     <BookOpen className="w-4 h-4" /> Start Reading
+                  </Link>
+                )}
+                {readingProgress && story.chapters.length > 0 && (
+                  <Link
+                    to={`/story/${story.id}/chapter/${readingProgress.chapterNumber}`}
+                    className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-cyan-500/40 text-cyan-400 font-bold rounded-lg hover:bg-slate-700 hover:border-cyan-500/70 transition font-['Rajdhani'] tracking-wide uppercase text-sm"
+                    title={readingProgress.title ? `Last read: ${readingProgress.title}` : undefined}
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Continue Ch.&nbsp;{readingProgress.chapterNumber}
                   </Link>
                 )}
                 {user && (

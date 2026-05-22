@@ -132,6 +132,22 @@ export default function ChapterPage() {
         setComments(chapterRes.data.comments);
         setLatestComments(latestCommentsRes.data.latestComments || []);
         setStoryAuthorId(storyRes.data.author_id);
+
+        // Persist reading progress so StoryPage can show a "Continue" button
+        if (id && chapterRes.data?.chapter_number) {
+          try {
+            localStorage.setItem(
+              `rw_progress_${id}`,
+              JSON.stringify({
+                chapterNumber: chapterRes.data.chapter_number,
+                title: chapterRes.data.title,
+                updatedAt: Date.now(),
+              })
+            );
+          } catch {
+            // localStorage may be unavailable in private-browsing edge cases
+          }
+        }
       } catch (error) {
         console.error('Error loading chapter:', error);
       }
