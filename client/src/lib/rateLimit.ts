@@ -36,7 +36,7 @@ export class LoginRateLimiter {
       const remainingMs = this.blockedUntil - now;
       return {
         allowed: false,
-        error: `Too many login attempts. Please try again in ${Math.ceil(remainingMs / 1000)} seconds.`,
+        error: `Bạn đã thử đăng nhập quá nhiều lần. Vui lòng thử lại sau ${Math.ceil(remainingMs / 1000)} giây.`,
         retryAfter: remainingMs
       };
     }
@@ -51,7 +51,7 @@ export class LoginRateLimiter {
       this.blockedUntil = now + this.config.windowMs;
       return {
         allowed: false,
-        error: `Maximum login attempts exceeded. Please try again in 15 minutes.`,
+        error: `Bạn đã vượt quá số lần đăng nhập cho phép. Vui lòng thử lại sau 15 phút.`,
         retryAfter: this.config.windowMs
       };
     }
@@ -225,9 +225,9 @@ export function getRetryAfter(error: any): number | null {
  */
 export function formatRetryTime(seconds: number): string {
   if (seconds < 60) {
-    return `${seconds} second${seconds !== 1 ? 's' : ''}`;
+    return `${seconds} giây`;
   }
 
   const minutes = Math.ceil(seconds / 60);
-  return `${minutes} minute${minutes !== 1 ? 's' : ''}`;
+  return `${minutes} phút`;
 }

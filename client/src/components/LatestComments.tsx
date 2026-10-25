@@ -1,4 +1,6 @@
+import { useLocation, useNavigate } from 'react-router-dom';
 import { User, MessageCircle } from 'lucide-react';
+import { timeAgo } from '../lib/format';
 
 interface LatestComment {
   id: string;
@@ -18,92 +20,80 @@ interface LatestCommentsProps {
 }
 
 export default function LatestComments({ storyId, latestComments, isLoading }: LatestCommentsProps) {
-  const formatDate = (timestamp: number) => {
-    const date = new Date(timestamp * 1000);
-    const now = new Date();
-    const diffMs = now.getTime() - date.getTime();
-    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-    const diffMins = Math.floor(diffMs / (1000 * 60));
-
-    if (diffMins < 1) return 'Just now';
-    if (diffMins < 60) return `${diffMins}m ago`;
-    if (diffHours < 24) return `${diffHours}h ago`;
-    if (diffDays < 7) return `${diffDays}d ago`;
-    return date.toLocaleDateString();
-  };
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const getLocationText = (comment: LatestComment) => {
-    if (comment.type === 'story') {
-      return 'on story';
-    } else if (comment.type === 'chapter') {
-      return `in ${comment.chapter_title || 'Untitled'}`;
-    }
+    if (comment.type === 'story') return 'về bộ truyện';
+    if (comment.type === 'chapter') return `trong ${comment.chapter_title || 'chương không tên'}`;
     return '';
   };
 
+  const openComment = (comment: LatestComment) => {
+    const path = comment.type === 'story'
+      ? `/story/${storyId}`
+      : `/story/${storyId}/chapter/${comment.chapter_number}`;
+    const hash = `comment-${comment.id}`;
+    if (location.pathname === path) {
+      // Same page: changing the hash scrolls to (and highlights) the comment
+      window.location.assign(`#${hash}`);
+    } else {
+      navigate(`${path}#${hash}`);
+    }
+  };
+
   return (
-    <div className="rounded-lg border border-slate-800/50 bg-slate-900/40 p-4">
-      <div className="flex items-center gap-2 mb-4">
-        <MessageCircle className="w-5 h-5 text-cyan-500" />
-        <h3 className="text-sm font-semibold text-slate-300">Latest Comments</h3>
+    <section className="card p-4" aria-label="Bình luận mới nhất">
+      <div className="flex items-center gap-2 mb-3">
+        <MessageCircle className="w-5 h-5 text-primary-400" />
+        <h3 className="text-sm font-bold text-ink-200 font-display">Bình luận mới nhất</h3>
       </div>
 
       {isLoading ? (
         <div className="space-y-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="animate-pulse">
-              <div className="h-3 bg-slate-800 rounded w-3/4 mb-2"></div>
-              <div className="h-2 bg-slate-800 rounded w-1/2"></div>
+            <div key={i}>
+              <div className="skeleton h-3 w-3/4 mb-2" />
+              <div className="skeleton h-2.5 w-1/2" />
             </div>
           ))}
         </div>
       ) : latestComments.length === 0 ? (
-        <p className="text-xs text-slate-500 italic">No comments yet</p>
+        <p className="text-sm text-ink-500 italic">Chưa có bình luận nào</p>
       ) : (
-        <div className="space-y-3">
+        <ul className="space-y-1">
           {latestComments.map((comment) => (
-            <div
-              key={comment.id}
-              className="group cursor-pointer hover:bg-slate-800/30 rounded p-2 transition"
-              onClick={() => {
-                if (comment.type === 'story') {
-                  window.location.hash = `comment-${comment.id}`;
-                } else {
-                  window.location.href = `/story/${storyId}/chapter/${comment.chapter_number}#comment-${comment.id}`;
-                }
-              }}
-            >
-              <div className="flex items-start gap-2">
-                <div className="w-6 h-6 rounded-full flex-shrink-0 bg-slate-800 flex items-center justify-center">
+            <li key={comment.id}>
+              <button
+                type="button"
+                onClick={() => openComment(comment)}
+                className="w-full text-left flex items-start gap-2.5 rounded-xl p-2 hover:bg-ink-900 transition"
+              >
+                <div className="w-7 h-7 rounded-full shrink-0 bg-ink-900 flex items-center justify-center overflow-hidden">
                   {comment.avatar_url ? (
-                    <img
-                      src={comment.avatar_url}
-                      alt=""
-                      className="w-6 h-6 rounded-full object-cover"
-                    />
+                    <img src={comment.avatar_url} alt="" className="w-7 h-7 object-cover" />
                   ) : (
-                    <User className="w-3 h-3 text-slate-600" />
+                    <User className="w-3.5 h-3.5 text-ink-500" />
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs font-medium text-slate-300">
-                    <span className="text-slate-300">{comment.username}</span>
+                  <div className="text-xs leading-snug">
+                    <span className="font-semibold text-ink-200">{comment.username}</span>
                     {' '}
-                    <span className="text-slate-500">has commented {getLocationText(comment)}</span>
+                    <span className="text-ink-500">đã bình luận {getLocationText(comment)}</span>
                   </div>
-                  <p className="text-xs text-slate-400 line-clamp-2 break-words mt-1">
+                  <p className="text-[13px] text-ink-300 line-clamp-2 break-words mt-0.5">
                     {comment.content}
                   </p>
-                  <p className="text-xs text-slate-600 mt-1">
-                    {formatDate(comment.created_at)}
+                  <p className="text-[11px] text-ink-500 mt-0.5">
+                    {timeAgo(comment.created_at)}
                   </p>
                 </div>
-              </div>
-            </div>
+              </button>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
-    </div>
+    </section>
   );
 }

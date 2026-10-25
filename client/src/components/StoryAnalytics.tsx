@@ -1,6 +1,7 @@
 import { useEffect, useState, useId } from 'react';
 import { Eye, Star, BookOpen, Users, MessageCircle, TrendingUp } from 'lucide-react';
 import api from '../lib/api';
+import { formatCompact } from '../lib/format';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ function LineChart({
   const midPt = pts[Math.floor((n - 1) / 2)];
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: H }}>
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full text-ink-500" style={{ height: H }}>
       <defs>
         <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity={areaOpacity * 2} />
@@ -87,13 +88,13 @@ function LineChart({
       )}
       {/* Axis labels */}
       {labelFirst && (
-        <text x={PAD.l} y={H - 4} fontSize="9" fill="#475569" textAnchor="start">{labelFirst}</text>
+        <text x={PAD.l} y={H - 4} fontSize="9" fill="currentColor" textAnchor="start">{labelFirst}</text>
       )}
       {labelMid && midPt && (
-        <text x={midPt.x} y={H - 4} fontSize="9" fill="#475569" textAnchor="middle">{labelMid}</text>
+        <text x={midPt.x} y={H - 4} fontSize="9" fill="currentColor" textAnchor="middle">{labelMid}</text>
       )}
       {labelLast && (
-        <text x={W - PAD.r} y={H - 4} fontSize="9" fill="#475569" textAnchor="end">{labelLast}</text>
+        <text x={W - PAD.r} y={H - 4} fontSize="9" fill="currentColor" textAnchor="end">{labelLast}</text>
       )}
     </svg>
   );
@@ -121,17 +122,17 @@ function HBarChart({
         const pct = (val / max) * 100;
         return (
           <div key={i} className="flex items-center gap-2">
-            <span className="w-28 text-xs text-slate-400 truncate shrink-0" title={String(row[labelKey])}>
+            <span className="w-28 text-xs text-ink-400 truncate shrink-0" title={String(row[labelKey])}>
               {String(row[labelKey])}
             </span>
             <div className="flex-1 flex items-center gap-2">
-              <div className="flex-1 h-5 bg-slate-800/60 rounded overflow-hidden">
+              <div className="flex-1 h-5 bg-ink-900 rounded overflow-hidden">
                 <div
                   className="h-full rounded transition-all duration-500"
                   style={{ width: `${pct}%`, backgroundColor: color, opacity: 0.75 }}
                 />
               </div>
-              <span className="text-xs text-slate-500 tabular-nums w-10 text-right shrink-0">
+              <span className="text-xs text-ink-500 tabular-nums w-10 text-right shrink-0">
                 {valueFormatter(val)}
               </span>
             </div>
@@ -162,7 +163,7 @@ function VBarChart({
             style={{ height: `${Math.max((v / max) * 64, v > 0 ? 3 : 0)}px`, backgroundColor: color, opacity: 0.7 }}
           />
           {labels.length <= 6 && (
-            <span className="text-[9px] text-slate-600 rotate-0 truncate w-full text-center">
+            <span className="text-[9px] text-ink-500 rotate-0 truncate w-full text-center">
               {labels[i].slice(5)} {/* show MM-DD */}
             </span>
           )}
@@ -178,25 +179,21 @@ function fmtDate(iso: string) {
   return iso.slice(5); // MM-DD
 }
 
-function fmtNum(n: number) {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
-  return String(n);
-}
+const fmtNum = (n: number) => formatCompact(n);
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-[#0d0d18] border border-slate-800/60 rounded-xl p-4">
-      <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">{title}</h3>
+    <div className="card p-4">
+      <h3 className="text-xs font-semibold text-ink-500 uppercase tracking-wider mb-3">{title}</h3>
       {children}
     </div>
   );
 }
 
 function EmptyState({ text }: { text: string }) {
-  return <p className="text-xs text-slate-600 italic py-4 text-center">{text}</p>;
+  return <p className="text-xs text-ink-500 italic py-4 text-center">{text}</p>;
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -217,21 +214,21 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
     setData(null);
     api.get(`/users/me/analytics/${storyId}`)
       .then(r => setData(r.data))
-      .catch(() => setError('Failed to load analytics.'))
+      .catch(() => setError('Không thể tải dữ liệu thống kê.'))
       .finally(() => setLoading(false));
   }, [storyId]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center py-20 text-slate-600 gap-3">
-        <div className="w-5 h-5 border-2 border-slate-700 border-t-cyan-500 rounded-full animate-spin" />
-        Loading analytics…
+      <div className="flex items-center justify-center py-20 text-ink-500 gap-3">
+        <div className="w-5 h-5 border-2 border-ink-700 border-t-primary-500 rounded-full animate-spin" />
+        Đang tải thống kê…
       </div>
     );
   }
 
   if (error || !data) {
-    return <p className="text-center text-red-400 py-10 text-sm">{error || 'No data.'}</p>;
+    return <p className="text-center text-red-400 py-10 text-sm">{error || 'Không có dữ liệu.'}</p>;
   }
 
   const { story, viewsOverTime, topChapters, ratingTrend, followersPerWeek, topCommenters } = data;
@@ -256,8 +253,8 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
     <div className="space-y-4">
       {/* Story header */}
       <div className="flex items-center gap-2">
-        <TrendingUp className="w-4 h-4 text-cyan-400" />
-        <h2 className="text-base font-semibold text-slate-200 font-['Rajdhani'] tracking-wide truncate">
+        <TrendingUp className="w-4 h-4 text-primary-400" />
+        <h2 className="text-base font-semibold text-ink-200 font-display tracking-wide truncate">
           {storyTitle}
         </h2>
       </div>
@@ -265,30 +262,30 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
       {/* Summary row */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
         {[
-          { icon: Eye, label: 'Total Views', value: fmtNum(story.views), color: 'text-cyan-400' },
-          { icon: Eye, label: 'Views (30d)', value: fmtNum(totalViewsThisMonth), color: 'text-cyan-300' },
-          { icon: Star, label: 'Rating', value: story.rating_avg ? story.rating_avg.toFixed(2) : '—', color: 'text-amber-400' },
-          { icon: BookOpen, label: 'Chapters', value: String(story.chapter_count), color: 'text-violet-400' },
-          { icon: MessageCircle, label: 'Top Commenter', value: topCommenters[0]?.username ?? '—', color: 'text-emerald-400' },
+          { icon: Eye, label: 'Tổng lượt xem', value: fmtNum(story.views), color: 'text-primary-400' },
+          { icon: Eye, label: 'Lượt xem (30 ngày)', value: fmtNum(totalViewsThisMonth), color: 'text-primary-300' },
+          { icon: Star, label: 'Đánh giá', value: story.rating_avg ? story.rating_avg.toFixed(2) : '—', color: 'text-amber-400' },
+          { icon: BookOpen, label: 'Số chương', value: String(story.chapter_count), color: 'text-violet-400' },
+          { icon: MessageCircle, label: 'Bình luận nhiều nhất', value: topCommenters[0]?.username ?? '—', color: 'text-emerald-400' },
         ].map(({ icon: Icon, label, value, color }) => (
-          <div key={label} className="bg-[#0d0d18] border border-slate-800/60 rounded-xl p-3 flex flex-col gap-1">
+          <div key={label} className="card p-3 flex flex-col gap-1">
             <div className="flex items-center gap-1.5">
               <Icon className={`w-3.5 h-3.5 ${color}`} />
-              <span className="text-[10px] text-slate-500 uppercase tracking-wider">{label}</span>
+              <span className="text-[10px] text-ink-500 uppercase tracking-wider">{label}</span>
             </div>
-            <span className={`text-lg font-bold font-['Rajdhani'] ${color} truncate`}>{value}</span>
+            <span className={`text-lg font-bold font-display ${color} truncate`} title={value}>{value}</span>
           </div>
         ))}
       </div>
 
       {/* Views over time */}
-      <Section title={`Views Over Time — Last 30 Days${peakDay.views > 0 ? ` · Peak: ${peakDay.view_date.slice(5)} (${peakDay.views})` : ''}`}>
+      <Section title={`Lượt xem 30 ngày qua${peakDay.views > 0 ? ` · Cao nhất: ${peakDay.view_date.slice(5)} (${peakDay.views})` : ''}`}>
         {viewValues.every(v => v === 0) ? (
-          <EmptyState text="No views recorded yet in the last 30 days." />
+          <EmptyState text="Chưa có lượt xem nào trong 30 ngày qua." />
         ) : (
           <LineChart
             values={viewValues}
-            color="#06b6d4"
+            color="#0ea5e9"
             labelFirst={viewDates[0]}
             labelMid={viewDates[Math.floor((viewDates.length - 1) / 2)]}
             labelLast={viewDates[viewDates.length - 1]}
@@ -298,16 +295,16 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
 
       {/* Middle row: Top chapters + Rating trend */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Section title="Top Chapters by Views">
+        <Section title="Chương được xem nhiều nhất">
           {topChapters.length === 0 ? (
-            <EmptyState text="No chapters yet." />
+            <EmptyState text="Chưa có chương nào." />
           ) : (
             <HBarChart
               rows={topChapters.map(c => ({
-                label: `Ch.${c.chapter_number}${c.title ? ` — ${c.title}` : ''}`,
+                label: `Chương ${c.chapter_number}${c.title ? ` — ${c.title}` : ''}`,
                 views: c.views,
               }))}
-              color="#06b6d4"
+              color="#0ea5e9"
               labelKey="label"
               valueKey="views"
               valueFormatter={fmtNum}
@@ -315,9 +312,9 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
           )}
         </Section>
 
-        <Section title="Rating Trend — Last 12 Weeks">
+        <Section title="Xu hướng đánh giá — 12 tuần qua">
           {ratingValues.length === 0 ? (
-            <EmptyState text="No ratings in the last 12 weeks." />
+            <EmptyState text="Chưa có đánh giá nào trong 12 tuần qua." />
           ) : (
             <LineChart
               values={ratingValues}
@@ -329,10 +326,10 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
             />
           )}
           {ratingValues.length > 0 && (
-            <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-              <span>Min <span className="text-slate-300">{Math.min(...ratingValues).toFixed(1)}</span></span>
-              <span>Max <span className="text-slate-300">{Math.max(...ratingValues).toFixed(1)}</span></span>
-              <span>Avg <span className="text-slate-300">
+            <div className="flex items-center gap-4 mt-2 text-xs text-ink-500">
+              <span>Thấp nhất <span className="text-ink-300">{Math.min(...ratingValues).toFixed(1)}</span></span>
+              <span>Cao nhất <span className="text-ink-300">{Math.max(...ratingValues).toFixed(1)}</span></span>
+              <span>Trung bình <span className="text-ink-300">
                 {(ratingValues.reduce((a, b) => a + b, 0) / ratingValues.length).toFixed(2)}
               </span></span>
             </div>
@@ -342,38 +339,38 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
 
       {/* Bottom row: New followers + Top commenters */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Section title="New Followers per Week — Last 12 Weeks">
+        <Section title="Người theo dõi mới mỗi tuần — 12 tuần qua">
           {followerValues.length === 0 ? (
-            <EmptyState text="No new followers in the last 12 weeks." />
+            <EmptyState text="Không có người theo dõi mới trong 12 tuần qua." />
           ) : (
             <>
               <VBarChart values={followerValues} labels={followerDates} color="#a78bfa" />
-              <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Total <span className="text-slate-300 ml-1">{followerValues.reduce((a, b) => a + b, 0)}</span></span>
-                <span>Peak week <span className="text-slate-300">{Math.max(...followerValues)}</span></span>
+              <div className="flex items-center gap-4 mt-2 text-xs text-ink-500">
+                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> Tổng <span className="text-ink-300 ml-1">{followerValues.reduce((a, b) => a + b, 0)}</span></span>
+                <span>Tuần cao nhất <span className="text-ink-300">{Math.max(...followerValues)}</span></span>
               </div>
             </>
           )}
         </Section>
 
-        <Section title="Most Active Commenters">
+        <Section title="Độc giả bình luận tích cực nhất">
           {topCommenters.length === 0 ? (
-            <EmptyState text="No comments yet." />
+            <EmptyState text="Chưa có bình luận nào." />
           ) : (
             <div className="space-y-2">
               {topCommenters.map((c, i) => (
                 <div key={c.username} className="flex items-center gap-2.5">
-                  <span className="text-xs text-slate-600 w-4 tabular-nums shrink-0">#{i + 1}</span>
+                  <span className="text-xs text-ink-500 w-5 tabular-nums shrink-0">#{i + 1}</span>
                   {c.avatar_url ? (
                     <img src={c.avatar_url} alt={c.username} className="w-6 h-6 rounded-full object-cover shrink-0" />
                   ) : (
-                    <div className="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-[10px] text-slate-400 font-bold shrink-0">
+                    <div className="w-6 h-6 rounded-full bg-ink-800 flex items-center justify-center text-[10px] text-ink-400 font-bold shrink-0">
                       {c.username[0]?.toUpperCase()}
                     </div>
                   )}
-                  <span className="flex-1 text-xs text-slate-300 truncate">{c.username}</span>
+                  <span className="flex-1 text-xs text-ink-300 truncate">{c.username}</span>
                   <span className="text-xs text-emerald-400 tabular-nums shrink-0">
-                    {c.comment_count} <span className="text-slate-600">comments</span>
+                    {c.comment_count} <span className="text-ink-500">bình luận</span>
                   </span>
                 </div>
               ))}
