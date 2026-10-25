@@ -1,26 +1,17 @@
 import { useEffect, useState, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 import api from '../lib/api';
-import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit } from 'lucide-react';
+import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCircle, Share2, List, ChevronDown, ChevronUp, Shield, Plus, X, Edit, Search, Check, ArrowUpDown, FileText, Bookmark, GripVertical } from 'lucide-react';
 import CommentInteractions from '../components/CommentInteractions';
 import LatestComments from '../components/LatestComments';
+import { ChapterImageIcon, PageLoader, Alert } from '../components/ui';
+import { getCategoryBadge, genreLabel, statusLabel, typeLabel, apiErrorMessage } from '../lib/i18n';
+import { formatDate, formatNumber, formatCompact, timeAgo, isRecent } from '../lib/format';
+import { getProgress, getReadChapters, type StoredProgress } from '../lib/readingProgress';
 
-const TAG_CATEGORIES = {
-  light_novel: { label: 'Light Novel', color: 'red', badgeColor: 'bg-red-500' },
-  web_novel: { label: 'Web Novel', color: 'yellow', badgeColor: 'bg-yellow-500' },
-  manga: { label: 'Manga', color: 'orange', badgeColor: 'bg-amber-500' },
-};
-
-const getCategoryBadge = (tags?: string) => {
-  if (!tags) return null;
-  const tagArray = tags.split(',').map(t => t.trim().toLowerCase().replace(/\s+/g, '_'));
-  const firstTag = tagArray[0];
-  const category = TAG_CATEGORIES[firstTag as keyof typeof TAG_CATEGORIES];
-  return category || null;
-};
-
-interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; }
+interface Chapter { id: string; chapter_number: number; title: string; views: number; created_at: number; volume_id?: string; has_images?: boolean; }
 interface Volume { id: string; volume_number: number; title: string; cover_url?: string; description?: string; chapter_count?: number; }
 interface StoryDetail {
   id: string; title: string; description?: string; cover_url?: string;
@@ -39,29 +30,24 @@ function StarRating({ rating, onRate, interactive = false, size = 'md' }: { rati
   return (
     <div className="flex items-center gap-0.5">
       {[1, 2, 3, 4, 5].map(star => (
-        <button key={star} type="button" disabled={!interactive}
+        <button key={star} type="button" disabled={!interactive} aria-label={`${star} sao`}
           onClick={() => onRate?.(star)}
           onMouseEnter={() => interactive && setHover(star)}
           onMouseLeave={() => interactive && setHover(0)}
-          className={`${interactive ? 'cursor-pointer hover:scale-110' : 'cursor-default'} transition-transform`}>
-          <Star className={`${cls} ${(hover || rating) >= star ? 'text-amber-400 fill-amber-400' : 'text-slate-600'}`} />
+          className={`${interactive ? 'cursor-pointer hover:scale-110 p-1' : 'cursor-default'} transition-transform`}>
+          <Star className={`${cls} ${(hover || rating) >= star ? 'text-amber-500 fill-amber-500' : 'text-ink-700'}`} />
         </button>
       ))}
     </div>
   );
 }
 
-function timeSince(ts: number) {
-  const diff = Math.floor(Date.now() / 1000) - ts;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
-  return new Date(ts * 1000).toLocaleDateString();
-}
+type ChapterFilter = 'all' | 'unread' | 'images';
 
 export default function StoryPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { showToast } = useToast();
   const textareaRefs = useRef<Record<string, HTMLTextAreaElement | null>>({});
   const volumesRef = useRef<HTMLDivElement | null>(null);
   const chaptersRef = useRef<HTMLDivElement | null>(null);
@@ -136,19 +122,18 @@ export default function StoryPage() {
   const [showLatestChapters, setShowLatestChapters] = useState(true);
 
   // Reading progress (persisted in localStorage by ChapterPage)
-  const [readingProgress, setReadingProgress] = useState<{ chapterNumber: number; title: string } | null>(null);
+  const [readingProgress, setReadingProgress] = useState<StoredProgress | null>(null);
+  const [readIds, setReadIds] = useState<Set<string>>(new Set());
+
+  // Chapter list search / filter / order
+  const [chapterQuery, setChapterQuery] = useState('');
+  const [chapterFilter, setChapterFilter] = useState<ChapterFilter>('all');
+  const [newestFirst, setNewestFirst] = useState(false);
 
   useEffect(() => {
     if (!id) return;
-    try {
-      const saved = localStorage.getItem(`rw_progress_${id}`);
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (parsed?.chapterNumber) setReadingProgress(parsed);
-      }
-    } catch {
-      // Ignore parse errors
-    }
+    setReadingProgress(getProgress(id));
+    setReadIds(getReadChapters(id));
   }, [id]);
 
   useEffect(() => {
@@ -181,6 +166,32 @@ export default function StoryPage() {
     loadStory();
   }, [id]);
 
+  // Scroll to and highlight a story comment linked as #comment-<id> (e.g. from Latest Comments)
+  const hasComments = comments.length > 0;
+  useEffect(() => {
+    if (!hasComments) return;
+    let timer: number | undefined;
+    const focusLinkedComment = () => {
+      const hash = window.location.hash;
+      if (!hash.startsWith('#comment-')) return;
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => {
+        const el = document.getElementById(hash.slice(1));
+        if (!el) return;
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        el.classList.remove('comment-highlight');
+        void el.offsetWidth; // restart the highlight animation
+        el.classList.add('comment-highlight');
+      }, 150);
+    };
+    focusLinkedComment();
+    window.addEventListener('hashchange', focusLinkedComment);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('hashchange', focusLinkedComment);
+    };
+  }, [hasComments]);
+
   const handleRate = async (rating: number) => {
     const r = await api.post(`/stories/${id}/rate`, { rating });
     setUserRating(r.data.user_rating);
@@ -203,8 +214,7 @@ export default function StoryPage() {
       setNotesSaved(true);
       setTimeout(() => setNotesSaved(false), 2000);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to save notes';
-      setNotesError(errorMsg);
+      setNotesError(apiErrorMessage(error, 'Không thể lưu ghi chú'));
     } finally {
       setNotesLoading(false);
     }
@@ -212,7 +222,7 @@ export default function StoryPage() {
 
   const submitReview = async () => {
     if (reviewText.trim().length < 9) {
-      setReviewError('Review must be longer than 8 characters');
+      setReviewError('Đánh giá phải dài hơn 8 ký tự');
       return;
     }
 
@@ -229,15 +239,14 @@ export default function StoryPage() {
       
       setTimeout(() => setReviewSuccess(false), 2000);
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to submit review';
-      setReviewError(errorMsg);
+      setReviewError(apiErrorMessage(error, 'Không thể gửi đánh giá'));
     } finally {
       setReviewLoading(false);
     }
   };
 
   const deleteReview = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this review?')) return;
+    if (!confirm('Bạn có chắc muốn xóa đánh giá này?')) return;
 
     try {
       await api.delete(`/stories/${id}/ratings/${userId}`);
@@ -249,9 +258,10 @@ export default function StoryPage() {
       ]);
       setReviews(reviewsRes.data.reviews || []);
       setStory(storyRes.data);
+      showToast('Đã xóa đánh giá', 'success');
     } catch (error: any) {
       console.error('Error deleting review:', error);
-      alert(error.response?.data?.error || 'Failed to delete review');
+      showToast(apiErrorMessage(error, 'Không thể xóa đánh giá'), 'error');
     }
   };
 
@@ -290,8 +300,7 @@ export default function StoryPage() {
       setTimeout(() => setVolumeSuccess(false), 2000);
     } catch (error: any) {
       console.error('Volume creation error:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to create volume';
-      setVolumeError(errorMsg);
+      setVolumeError(apiErrorMessage(error, 'Không thể tạo tập'));
     } finally {
       setVolumeLoading(false);
     }
@@ -330,8 +339,7 @@ export default function StoryPage() {
       setTimeout(() => setEditVolumeSuccess(false), 2000);
     } catch (error: any) {
       console.error('Volume edit error:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to edit volume';
-      setEditVolumeError(errorMsg);
+      setEditVolumeError(apiErrorMessage(error, 'Không thể cập nhật tập'));
     } finally {
       setEditVolumeLoading(false);
     }
@@ -425,11 +433,11 @@ export default function StoryPage() {
     if (!form || !form.title.trim()) return;
 
     if (story.type === 'text' && !form.content.trim()) {
-      setChapterErrors(prev => ({ ...prev, [volumeId]: 'Content is required for text chapters' }));
+      setChapterErrors(prev => ({ ...prev, [volumeId]: 'Chương truyện chữ cần có nội dung' }));
       return;
     }
     if (story.type === 'comic' && form.images.length === 0) {
-      setChapterErrors(prev => ({ ...prev, [volumeId]: 'At least one image is required for comic chapters' }));
+      setChapterErrors(prev => ({ ...prev, [volumeId]: 'Chương truyện tranh cần ít nhất một hình ảnh' }));
       return;
     }
 
@@ -467,17 +475,21 @@ export default function StoryPage() {
       setStory(res.data);
     } catch (error: any) {
       console.error('Chapter creation error:', error.response?.data || error.message);
-      const errorMsg = error.response?.data?.error || error.message || 'Failed to create chapter';
-      setChapterErrors(prev => ({ ...prev, [volumeId]: errorMsg }));
+      setChapterErrors(prev => ({ ...prev, [volumeId]: apiErrorMessage(error, 'Không thể tạo chương') }));
     } finally {
       setChapterLoading(prev => ({ ...prev, [volumeId]: false }));
     }
   };
 
-  const handleShare = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
+  const handleShare = async () => {
+    try {
+      await navigator.clipboard.writeText(window.location.href);
+      setCopied(true);
+      showToast('Đã sao chép liên kết truyện', 'success');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      showToast('Không thể sao chép liên kết', 'error');
+    }
   };
 
   const addComment = async (e: React.FormEvent) => {
@@ -491,9 +503,9 @@ export default function StoryPage() {
       setComments([res.data, ...comments]);
       setNewComment('');
     } catch (error: any) {
-      const errorMsg = error.response?.data?.error || 'Failed to post comment';
-      setCommentError(errorMsg);
-      if (errorMsg.includes('banned')) {
+      const rawMsg: string = error.response?.data?.error || '';
+      setCommentError(apiErrorMessage(error, 'Không thể đăng bình luận'));
+      if (rawMsg.includes('banned')) {
         setUserCommentsBanned(true);
       }
     } finally {
@@ -502,25 +514,26 @@ export default function StoryPage() {
   };
 
   const deleteComment = async (commentId: string) => {
-    if (!window.confirm('Are you sure you want to delete this comment?')) return;
+    if (!window.confirm('Bạn có chắc muốn xóa bình luận này?')) return;
     
     try {
       await api.delete(`/stories/${id}/comments/${commentId}`);
       setComments(comments.filter(c => c.id !== commentId));
+      showToast('Đã xóa bình luận', 'success');
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to delete comment');
+      showToast(apiErrorMessage(error, 'Không thể xóa bình luận'), 'error');
     }
   };
 
   const banUserFromComments = async (userId: string, username: string) => {
-    if (!window.confirm(`Ban ${username} from commenting and reviewing? This action cannot be undone.`)) return;
+    if (!window.confirm(`Cấm ${username} bình luận và đánh giá? Thao tác này không thể hoàn tác.`)) return;
     
     setBanningUserId(userId);
     try {
       await api.post(`/users/${userId}/ban-from-comments`, {});
-      alert(`${username} has been banned from commenting and reviewing`);
+      showToast(`Đã cấm ${username} bình luận và đánh giá`, 'success');
     } catch (error: any) {
-      alert(error.response?.data?.error || 'Failed to ban user');
+      showToast(apiErrorMessage(error, 'Không thể cấm người dùng'), 'error');
     } finally {
       setBanningUserId(null);
     }
@@ -635,234 +648,305 @@ export default function StoryPage() {
       }
     } catch (error) {
       console.error('[Drag Drop] Error reordering chapters:', error);
+      showToast(apiErrorMessage(error, 'Không thể sắp xếp lại chương'), 'error');
     } finally {
       setReorderingLoading(false);
     }
   };
 
-  if (!story) return (
-    <div className="flex items-center justify-center min-h-[60vh]">
-      <div className="w-10 h-10 border-4 border-slate-700 border-t-cyan-500 rounded-full animate-spin" />
-    </div>
-  );
+  if (!story) return <PageLoader label="Đang tải truyện…" />;
 
   const genres = story.genre?.split(',').map(g => g.trim()).filter(Boolean) ?? [];
   const descTruncated = story.description && story.description.length > 400 && !showFullDesc;
+  const categoryBadge = getCategoryBadge(story.tags);
+  const isAuthor = !!user && story.author_id === user.id;
+  const canManageChapters = !!user?.is_admin && isAuthor;
+  const firstChapter = story.chapters[0];
+  const readCount = story.chapters.filter(ch => readIds.has(ch.id)).length;
+  const readPct = story.chapters.length ? Math.round((readCount / story.chapters.length) * 100) : 0;
+  const lastUpdated = story.chapters.length > 0 ? Math.max(...story.chapters.map(ch => ch.created_at)) : undefined;
+  const isFiltering = chapterQuery.trim() !== '' || chapterFilter !== 'all';
+  const canReorder = !!user?.is_admin && !isFiltering && !newestFirst;
+  const showImageIcons = story.type !== 'comic'; // every comic chapter is image-based
+
+  const matchesFilter = (ch: Chapter) => {
+    const q = chapterQuery.trim().toLowerCase();
+    if (q && !(ch.title || '').toLowerCase().includes(q) && String(ch.chapter_number) !== q) return false;
+    if (chapterFilter === 'unread' && readIds.has(ch.id)) return false;
+    if (chapterFilter === 'images' && !ch.has_images) return false;
+    return true;
+  };
+  const ordered = <T,>(list: T[]) => (newestFirst ? [...list].reverse() : list);
+  const hasIllustratedChapters = showImageIcons && story.chapters.some(ch => ch.has_images);
+
+  const statusStyle = story.status === 'completed'
+    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+    : story.status === 'hiatus'
+      ? 'bg-amber-500/10 text-amber-400 border-amber-500/25'
+      : 'bg-primary-500/10 text-primary-300 border-primary-500/25';
+
+  const renderChapterRow = (ch: Chapter, volumeId?: string) => {
+    const isNew = isRecent(ch.created_at);
+    const isRead = readIds.has(ch.id);
+    const isCurrent = readingProgress?.chapterId
+      ? readingProgress.chapterId === ch.id
+      : readingProgress?.chapterNumber === ch.chapter_number;
+    const isDragging = draggedChapterId === ch.id;
+    const isDraggedOver = draggedOverChapterId === ch.id;
+    const draggable = canReorder && !!volumeId;
+
+    const row = (
+      <Link
+        to={`/story/${story.id}/chapter/${ch.chapter_number}`}
+        onClick={(e) => reorderingLoading && e.preventDefault()}
+        className="flex items-center gap-3 w-full min-h-12 px-4 sm:px-6 py-2.5"
+        aria-label={`${ch.title}${ch.has_images && showImageIcons ? ' (có hình minh họa)' : ''}${isRead ? ' — đã đọc' : ''}`}
+      >
+        {draggable && <GripVertical className="w-4 h-4 text-ink-600 shrink-0 -ml-1 hidden sm:block" aria-hidden="true" />}
+        {showImageIcons && ch.has_images ? <ChapterImageIcon /> : showImageIcons && hasIllustratedChapters ? <span className="w-[1.375rem] shrink-0" aria-hidden="true" /> : null}
+        <span className={`flex-1 min-w-0 truncate font-medium transition ${
+          isCurrent ? 'text-primary-300' : isRead ? 'text-ink-500' : 'text-ink-200 group-hover:text-primary-300'
+        }`}>
+          {ch.title}
+        </span>
+        {isCurrent && <span className="badge bg-primary-500/12 text-primary-300 shrink-0"><Bookmark className="w-3 h-3" /> Đang đọc</span>}
+        {isNew && !isCurrent && <span className="badge bg-rose-500/12 text-rose-500 shrink-0">Mới</span>}
+        {isRead && !isCurrent && <Check className="w-4 h-4 text-emerald-400 shrink-0" aria-hidden="true" />}
+        <span className="hidden sm:flex items-center gap-1 text-xs text-ink-500 shrink-0 w-16 justify-end tabular-nums" title="Lượt xem">
+          <Eye className="w-3.5 h-3.5" />{formatCompact(ch.views)}
+        </span>
+        <span className="text-xs text-ink-500 shrink-0 w-[4.75rem] text-right tabular-nums">{formatDate(ch.created_at)}</span>
+      </Link>
+    );
+
+    if (!draggable) {
+      return (
+        <li key={ch.id} className={`group transition ${isCurrent ? 'bg-primary-500/[0.06]' : 'hover:bg-ink-900/70'}`}>
+          {row}
+        </li>
+      );
+    }
+    return (
+      <li
+        key={ch.id}
+        draggable
+        onDragStart={(e) => handleChapterDragStart(e, ch.id)}
+        onDragOver={handleChapterDragOver}
+        onDragEnter={(e) => handleChapterDragEnter(e, ch.id)}
+        onDragLeave={handleChapterDragLeave}
+        onDrop={(e) => handleChapterDrop(e, ch.id, volumeId)}
+        className={`group transition cursor-move ${
+          isDragging ? 'opacity-50 bg-primary-500/10' :
+          isDraggedOver ? 'bg-primary-500/15 shadow-[inset_0_2px_0_var(--primary-500)]' :
+          isCurrent ? 'bg-primary-500/[0.06]' : 'hover:bg-ink-900/70'
+        }`}
+      >
+        {row}
+      </li>
+    );
+  };
+
+  const jumpBtn = 'px-3.5 h-9 inline-flex items-center text-sm font-medium text-ink-400 hover:text-primary-300 hover:bg-primary-500/10 rounded-lg transition whitespace-nowrap';
+  const filterOptions: Array<{ value: ChapterFilter; label: string }> = [
+    { value: 'all', label: 'Tất cả' },
+    { value: 'unread', label: 'Chưa đọc' },
+    ...(hasIllustratedChapters ? [{ value: 'images' as ChapterFilter, label: 'Có minh họa' }] : []),
+  ];
 
   return (
-    <div className="min-h-screen bg-[#0a0a12]">
+    <div>
       {/* Hero banner with blurred cover background */}
-      <div className="relative overflow-hidden">
+      <div className="relative overflow-hidden border-b border-line">
         {story.cover_url && (
-          <div className="absolute inset-0">
-            <img src={story.cover_url} alt="" className="w-full h-full object-cover scale-110 blur-2xl opacity-15" />
-            <div className="absolute inset-0 bg-gradient-to-b from-[#0a0a12]/60 via-[#0a0a12]/80 to-[#0a0a12]" />
+          <div className="absolute inset-0" aria-hidden="true">
+            <img src={story.cover_url} alt="" className="w-full h-full object-cover scale-110 blur-3xl opacity-25 dark:opacity-20" />
+            <div className="absolute inset-0 bg-gradient-to-b from-canvas/40 via-canvas/80 to-canvas" />
           </div>
         )}
 
-        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-0">
-          <div className="flex flex-col md:flex-row gap-6 md:gap-8">
+        <div className="relative max-w-6xl mx-auto px-4 sm:px-6 pt-8 pb-8">
+          <nav className="text-xs text-ink-500 mb-5 flex items-center gap-1.5" aria-label="Đường dẫn">
+            <Link to="/" className="hover:text-primary-300">Trang chủ</Link>
+            <span aria-hidden="true">/</span>
+            <Link to="/browse" className="hover:text-primary-300">Truyện</Link>
+            <span aria-hidden="true">/</span>
+            <span className="text-ink-400 truncate">{story.title}</span>
+          </nav>
+          <div className="flex flex-col md:flex-row gap-6 md:gap-10">
             {/* Cover */}
             <div className="shrink-0 self-center md:self-start">
-              <div className="w-52 md:w-60 aspect-[3/4] rounded-xl overflow-hidden border-2 border-slate-800/80 shadow-[0_0_40px_rgba(0,0,0,0.5)] relative group">
+              <div className="w-48 md:w-60 aspect-[3/4] rounded-2xl overflow-hidden border border-line shadow-[var(--rw-shadow-lg)] relative bg-ink-900">
                 {story.cover_url ? (
                   <img src={story.cover_url} alt={story.title} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="w-full h-full bg-gradient-to-br from-slate-900 to-slate-800 flex items-center justify-center">
-                    {story.type === 'comic' ? <Image className="w-16 h-16 text-slate-700" /> : <BookOpen className="w-16 h-16 text-slate-700" />}
+                  <div className="w-full h-full flex items-center justify-center">
+                    {story.type === 'comic' ? <Image className="w-16 h-16 text-ink-600" /> : <BookOpen className="w-16 h-16 text-ink-600" />}
                   </div>
                 )}
-                {/* Type badge on cover */}
-                {(() => {
-                  const categoryBadge = getCategoryBadge(story.tags);
-                  return categoryBadge ? (
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${categoryBadge.badgeColor} text-black`}>
-                      {categoryBadge.label}
-                    </span>
-                  ) : (
-                    <span className={`absolute top-3 left-3 px-2.5 py-1 rounded text-[10px] font-bold tracking-widest uppercase ${story.type === 'comic' ? 'bg-amber-500 text-black' : 'bg-cyan-500 text-black'}`}>
-                      {story.type === 'comic' ? 'Comic' : 'Novel'}
-                    </span>
-                  );
-                })()}
+                <span className={`badge absolute top-3 left-3 shadow-sm ${categoryBadge ? categoryBadge.badgeColor : story.type === 'comic' ? 'bg-orange-500 text-white' : 'bg-sky-500 text-white'}`}>
+                  {categoryBadge ? categoryBadge.label : typeLabel(story.type)}
+                </span>
               </div>
             </div>
 
             {/* Info */}
-            <div className="flex-1 min-w-0 pb-6">
-              {/* Genres above title */}
+            <div className="flex-1 min-w-0">
               {genres.length > 0 && (
                 <div className="flex items-center gap-2 flex-wrap mb-3">
                   {genres.map(g => (
-                    <span key={g} className="px-3 py-1 bg-cyan-500/10 text-cyan-400 text-xs font-semibold rounded border border-cyan-500/20">{g}</span>
+                    <Link key={g} to={`/browse?genre=${encodeURIComponent(g)}`} className="px-2.5 py-1 bg-primary-500/10 text-primary-300 text-xs font-semibold rounded-lg hover:bg-primary-500/20 transition">
+                      {genreLabel(g)}
+                    </Link>
                   ))}
                 </div>
               )}
 
-              {/* Title */}
-              <h1 className="text-3xl md:text-4xl font-bold text-slate-50 mb-6 font-['Rajdhani'] tracking-wide leading-tight">{story.title}</h1>
+              <h1 className="text-3xl md:text-4xl font-extrabold text-ink-50 mb-5 tracking-tight leading-tight">{story.title}</h1>
 
-              {/* Translator (Story Creator) */}
-              <Link to={`/user/${story.author_name}`} className="inline-flex items-center gap-2.5 mb-4 group">
-                {story.author_avatar ? (
-                  <img src={story.author_avatar} alt="" className="w-9 h-9 rounded-lg object-cover ring-2 ring-cyan-500/20" />
-                ) : (
-                  <div className="w-9 h-9 rounded-lg bg-slate-800 flex items-center justify-center ring-2 ring-slate-700"><User className="w-4 h-4 text-cyan-500/50" /></div>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-5">
+                {/* Translator (story creator) */}
+                <Link to={`/user/${story.author_name}`} className="inline-flex items-center gap-2.5 group">
+                  {story.author_avatar ? (
+                    <img src={story.author_avatar} alt="" className="w-10 h-10 rounded-full object-cover ring-2 ring-primary-500/25" />
+                  ) : (
+                    <div className="w-10 h-10 rounded-full bg-ink-900 flex items-center justify-center ring-2 ring-line"><User className="w-4 h-4 text-primary-400" /></div>
+                  )}
+                  <div>
+                    <span className="flex items-center gap-1 text-[11px] text-ink-500 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Dịch giả</span>
+                    <span className={`text-sm font-semibold transition ${story.author_is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500' : 'text-ink-200 group-hover:text-primary-300'}`}>
+                      {story.author_name}
+                      {story.author_is_admin && <span className="inline-block ml-0.5" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
+                    </span>
+                  </div>
+                </Link>
+                {story.work_author_name && (
+                  <div className="text-sm">
+                    <div className="text-[11px] text-ink-500 uppercase tracking-wider font-semibold">Tác giả</div>
+                    <div className="text-ink-200 font-medium">{story.work_author_name}</div>
+                  </div>
                 )}
-                <div>
-                  <span className={`text-sm font-medium transition ${story.author_is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500 group-hover:from-purple-300 group-hover:via-purple-200 group-hover:to-purple-400' : 'text-slate-300 group-hover:text-cyan-400'}`}>
-                    {story.author_name}
-                    {story.author_is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
-                  </span>
-                  <span className="flex items-center gap-1 text-[10px] text-cyan-500/60 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Translator</span>
-                </div>
-              </Link>
+                {story.illustrator_name && (
+                  <div className="text-sm">
+                    <div className="text-[11px] text-ink-500 uppercase tracking-wider font-semibold">Họa sĩ minh họa</div>
+                    <div className="text-ink-200 font-medium">{story.illustrator_name}</div>
+                  </div>
+                )}
+              </div>
 
-              {/* Author and Illustrator Info */}
-              {(story.work_author_name || story.illustrator_name) && (
-                <div className="flex flex-col gap-2 mb-5">
-                  {story.work_author_name && (
-                    <div className="text-sm">
-                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Author: </span>
-                      <span className="text-slate-300">{story.work_author_name}</span>
-                    </div>
-                  )}
-                  {story.illustrator_name && (
-                    <div className="text-sm">
-                      <span className="text-slate-500 text-xs uppercase tracking-wider font-semibold">Illustrator: </span>
-                      <span className="text-slate-300">{story.illustrator_name}</span>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Status row - below metadata */}
-              {story.status && (
-                <div className="flex items-center gap-2 mb-5">
-                  <span className={`px-3 py-1 rounded text-xs font-semibold ${story.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : story.status === 'hiatus' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' : 'bg-cyan-500/10 text-cyan-400 border border-cyan-500/20'}`}>
-                    {story.status === 'ongoing' ? '● Ongoing' : story.status === 'completed' ? '✓ Completed' : '⏸ Hiatus'}
+              <div className="flex flex-wrap items-center gap-2 mb-6 text-xs">
+                {story.status && (
+                  <span className={`px-2.5 py-1 rounded-lg font-semibold border ${statusStyle}`}>
+                    {story.status === 'ongoing' ? '● ' : story.status === 'completed' ? '✓ ' : '⏸ '}{statusLabel(story.status)}
                   </span>
-                </div>
-              )}
+                )}
+                <span className="px-2.5 py-1 rounded-lg font-semibold border border-line text-ink-400">{typeLabel(story.type)}</span>
+                <span className="px-2.5 py-1 rounded-lg font-semibold border border-line text-ink-400">{formatNumber(story.chapter_count)} chương</span>
+                {lastUpdated && (
+                  <span className="px-2.5 py-1 rounded-lg border border-line text-ink-400 flex items-center gap-1"><Clock className="w-3 h-3" /> Cập nhật {timeAgo(lastUpdated, 30)}</span>
+                )}
+              </div>
 
               {/* Action buttons */}
-              <div className="flex items-center gap-3 flex-wrap">
-                {story.chapters.length > 0 && (
-                  <Link to={`/story/${story.id}/chapter/1`} className="flex items-center gap-2 px-7 py-3 bg-cyan-500 text-black font-bold rounded-lg hover:bg-cyan-400 transition shadow-[0_0_25px_rgba(0,212,255,0.25)] font-['Rajdhani'] tracking-wide uppercase text-sm">
-                    <BookOpen className="w-4 h-4" /> Start Reading
-                  </Link>
-                )}
-                {readingProgress && story.chapters.length > 0 && (
+              <div className="flex items-center gap-2.5 flex-wrap">
+                {readingProgress && story.chapters.length > 0 ? (
                   <Link
                     to={`/story/${story.id}/chapter/${readingProgress.chapterNumber}`}
-                    className="flex items-center gap-2 px-6 py-3 bg-slate-800 border border-cyan-500/40 text-cyan-400 font-bold rounded-lg hover:bg-slate-700 hover:border-cyan-500/70 transition font-['Rajdhani'] tracking-wide uppercase text-sm"
-                    title={readingProgress.title ? `Last read: ${readingProgress.title}` : undefined}
+                    className="btn btn-primary btn-lg"
+                    title={readingProgress.title ? `Lần cuối đọc: ${readingProgress.title}` : undefined}
                   >
-                    <ArrowRight className="w-4 h-4" />
-                    Continue Ch.&nbsp;{readingProgress.chapterNumber}
+                    <ArrowRight className="w-5 h-5" />
+                    Đọc tiếp chương {readingProgress.chapterNumber}
+                  </Link>
+                ) : firstChapter && (
+                  <Link to={`/story/${story.id}/chapter/${firstChapter.chapter_number}`} className="btn btn-primary btn-lg">
+                    <BookOpen className="w-5 h-5" /> Bắt đầu đọc
+                  </Link>
+                )}
+                {readingProgress && firstChapter && (
+                  <Link to={`/story/${story.id}/chapter/${firstChapter.chapter_number}`} className="btn btn-secondary btn-lg">
+                    Đọc từ đầu
                   </Link>
                 )}
                 {user && (
-                  <button onClick={toggleBookmark} className={`flex items-center gap-2 px-5 py-3 rounded-lg border font-medium transition text-sm ${bookmarked ? 'bg-red-500/10 border-red-500/30 text-red-400 hover:bg-red-500/15' : 'border-slate-700 text-slate-400 hover:border-red-500/30 hover:text-red-400'}`}>
-                    <Heart className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} /> {bookmarked ? 'Saved' : 'Save'}
+                  <button type="button" onClick={toggleBookmark} aria-pressed={bookmarked} className={`btn btn-lg border ${bookmarked ? 'bg-rose-500/10 border-rose-500/30 text-rose-500 hover:bg-rose-500/15' : 'btn-secondary'}`}>
+                    <Heart className={`w-4 h-4 ${bookmarked ? 'fill-current' : ''}`} /> {bookmarked ? 'Đã lưu' : 'Lưu truyện'}
                   </button>
                 )}
-                <button onClick={handleShare} className="flex items-center gap-2 px-5 py-3 rounded-lg border border-slate-700 text-slate-400 hover:border-cyan-500/30 hover:text-cyan-400 transition text-sm">
-                  <Share2 className="w-4 h-4" /> {copied ? 'Copied!' : 'Share'}
+                <button type="button" onClick={handleShare} className="btn btn-secondary btn-lg" title="Sao chép liên kết">
+                  <Share2 className="w-4 h-4" /> {copied ? 'Đã sao chép!' : 'Chia sẻ'}
                 </button>
                 {user?.is_admin && (
-                  <Link to={`/story/${story.id}/edit`} className="px-4 py-3 rounded-lg border border-slate-700 text-slate-500 hover:border-cyan-500/30 hover:text-cyan-400 transition text-sm">
-                    Edit Series
+                  <Link to={`/story/${story.id}/edit`} className="btn btn-ghost btn-lg">
+                    <Edit className="w-4 h-4" /> Sửa truyện
                   </Link>
                 )}
               </div>
+
+              {/* Personal progress */}
+              {story.chapters.length > 0 && readCount > 0 && (
+                <div className="mt-5 max-w-md">
+                  <div className="flex justify-between text-xs text-ink-500 mb-1.5">
+                    <span>Bạn đã đọc {readCount}/{story.chapters.length} chương</span>
+                    <span className="tabular-nums">{readPct}%</span>
+                  </div>
+                  <div className="h-2 rounded-full bg-ink-900 overflow-hidden">
+                    <div className="h-full rounded-full bg-gradient-to-r from-primary-500 to-indigo-500" style={{ width: `${readPct}%` }} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
       </div>
 
       {/* Stats bar */}
-      <div className="border-y border-slate-800/60 bg-[#0d0d18]/80 backdrop-blur-sm">
+      <div className="border-b border-line bg-surface">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
-          <div className="grid grid-cols-2 sm:grid-cols-5 divide-x divide-slate-800/60">
-            <div className="flex flex-col items-center py-4 gap-1">
-              <div className="flex items-center gap-1.5">
-                <Heart className="w-4 h-4 text-red-400" />
-                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{bookmarkCount.toLocaleString()}</span>
+          <dl className="grid grid-cols-3 sm:grid-cols-5 divide-x divide-line">
+            {[
+              { icon: <Heart className="w-4 h-4 text-rose-500" />, value: formatNumber(bookmarkCount), label: 'Yêu thích' },
+              { icon: <Star className="w-4 h-4 text-amber-500 fill-amber-500" />, value: story.rating_avg ? story.rating_avg.toFixed(2) : '—', extra: `/ ${story.rating_count}`, label: 'Đánh giá' },
+              { icon: <Eye className="w-4 h-4 text-primary-400" />, value: formatCompact(story.views), label: 'Lượt xem' },
+              { icon: <MessageCircle className="w-4 h-4 text-emerald-400" />, value: formatNumber(story.comment_count), label: 'Bình luận', hideMobile: true },
+              { icon: <FileText className="w-4 h-4 text-indigo-400" />, value: formatCompact(story.total_word_count || 0), label: 'Số chữ', hideMobile: true },
+            ].map(stat => (
+              <div key={stat.label} className={`flex flex-col items-center py-4 gap-0.5 ${stat.hideMobile ? 'hidden sm:flex' : ''}`}>
+                <dd className="flex items-center gap-1.5">
+                  {stat.icon}
+                  <span className="text-lg font-bold text-ink-100 font-display tabular-nums">{stat.value}</span>
+                  {stat.extra && <span className="text-xs text-ink-500">{stat.extra}</span>}
+                </dd>
+                <dt className="text-[11px] text-ink-500 uppercase tracking-wider font-medium">{stat.label}</dt>
               </div>
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Favorites</span>
-            </div>
-            <div className="flex flex-col items-center py-4 gap-1">
-              <div className="flex items-center gap-1.5">
-                <Star className="w-4 h-4 text-amber-400 fill-amber-400" />
-                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.rating_avg ? story.rating_avg.toFixed(2) : '—'}</span>
-                <span className="text-xs text-slate-600">/ {story.rating_count}</span>
-              </div>
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Rating</span>
-            </div>
-            <div className="flex flex-col items-center py-4 gap-1">
-              <div className="flex items-center gap-1.5">
-                <Eye className="w-4 h-4 text-cyan-400" />
-                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.views.toLocaleString()}</span>
-              </div>
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Views</span>
-            </div>
-            <div className="flex flex-col items-center py-4 gap-1">
-              <div className="flex items-center gap-1.5">
-                <MessageCircle className="w-4 h-4 text-emerald-400" />
-                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{story.comment_count}</span>
-              </div>
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Comments</span>
-            </div>
-            <div className="flex flex-col items-center py-4 gap-1">
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="w-4 h-4 text-blue-400" />
-                <span className="text-lg font-bold text-slate-100 font-['Rajdhani']">{(story.total_word_count || 0).toLocaleString()}</span>
-              </div>
-              <span className="text-[11px] text-slate-500 uppercase tracking-wider font-medium">Words</span>
-            </div>
-          </div>
+            ))}
+          </dl>
         </div>
       </div>
 
-      {/* Sticky Jump Navigation */}
-      {(volumes.length > 0 || comments.length > 0 || reviews.length > 0) && (
-        <div className="sticky top-0 z-40 bg-gradient-to-r from-slate-900/95 via-slate-900/95 to-slate-900/95 border-b border-slate-800/60 backdrop-blur-sm">
+      {/* Sticky jump navigation */}
+      {(volumes.length > 0 || story.chapters.length > 0 || comments.length > 0 || reviews.length > 0) && (
+        <div className="sticky top-16 z-40 bg-surface/90 border-b border-line backdrop-blur-xl">
           <div className="max-w-6xl mx-auto px-4 sm:px-6">
-            <nav className="flex items-center gap-1 py-3 overflow-x-auto">
-              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider whitespace-nowrap mr-3">Jump to:</span>
-              {volumes.length > 0 && (
-                <button
-                  onClick={() => volumesRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
-                >
-                  Volumes
+            <nav className="flex items-center gap-1 py-2 overflow-x-auto no-scrollbar" aria-label="Chuyển nhanh">
+              <span className="text-xs font-semibold text-ink-500 uppercase tracking-wider whitespace-nowrap mr-2">Đi tới:</span>
+              {(volumes.length > 0 || story.chapters.length > 0) && (
+                <button type="button" onClick={() => volumesRef.current?.scrollIntoView({ behavior: 'smooth' })} className={jumpBtn}>
+                  {volumes.length > 0 ? 'Danh sách tập' : 'Danh sách chương'}
                 </button>
               )}
-              {story.chapters.length > 0 && (
-                <button
-                  onClick={() => chaptersRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
-                >
-                  Chapters
-                </button>
-              )}
-              {comments.length > 0 && (
-                <button
-                  onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
-                >
-                  Comments ({comments.length})
+              {story.description && (
+                <button type="button" onClick={() => chaptersRef.current?.scrollIntoView({ behavior: 'smooth' })} className={jumpBtn}>
+                  Giới thiệu
                 </button>
               )}
               {reviews.length > 0 && (
-                <button
-                  onClick={() => reviewsRef.current?.scrollIntoView({ behavior: 'smooth' })}
-                  className="px-4 py-1.5 text-sm font-medium text-slate-300 hover:text-cyan-400 hover:bg-cyan-500/10 rounded transition whitespace-nowrap"
-                >
-                  Reviews ({reviews.length})
+                <button type="button" onClick={() => reviewsRef.current?.scrollIntoView({ behavior: 'smooth' })} className={jumpBtn}>
+                  Đánh giá ({reviews.length})
                 </button>
               )}
+              <button type="button" onClick={() => commentsRef.current?.scrollIntoView({ behavior: 'smooth' })} className={jumpBtn}>
+                Bình luận ({comments.length})
+              </button>
             </nav>
           </div>
         </div>
@@ -873,99 +957,89 @@ export default function StoryPage() {
         <div className="flex flex-col lg:flex-row gap-6">
           {/* Left: synopsis */}
           <div className="flex-1 min-w-0 space-y-6">
-            {/* Latest Chapters Preview */}
-            {story.chapters.length > 0 && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
-                <button
-                  onClick={() => setShowLatestChapters(!showLatestChapters)}
-                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-slate-900/50 transition group"
-                >
-                  <h2 className="text-lg font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2 group-hover:text-cyan-400 transition">
-                    <BookOpen className="w-5 h-5 text-cyan-500" /> Latest Chapters
-                  </h2>
-                  {showLatestChapters ? (
-                    <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
-                  ) : (
-                    <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
-                  )}
-                </button>
-                {showLatestChapters && (
-                  <div className="divide-y divide-slate-800/30 px-6 py-4">
-                    {story.chapters.slice(-5).reverse().map((chapter) => {
-                      const volume = volumes.find(v => v.id === chapter.volume_id);
-                      return (
-                        <Link
-                          key={chapter.id}
-                          to={`/story/${story.id}/chapter/${chapter.chapter_number}`}
-                          className="flex items-center gap-4 py-3 hover:bg-cyan-500/5 px-3 -mx-3 rounded transition group first:pt-0 last:pb-0"
-                        >
-                          {volume?.cover_url && (
-                            <img
-                              src={volume.cover_url}
-                              alt={volume.title}
-                              className="w-12 h-16 rounded object-cover border border-slate-700/50 shrink-0 group-hover:scale-105 transition"
-                            />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
-                              <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">
-                                {volume ? volume.title || `Volume ${volume.volume_number}` : 'Unknown Volume'}
-                              </span>
-                            </div>
-                            <h3 className="font-medium text-slate-200 group-hover:text-cyan-400 transition truncate">
-                              {chapter.title}
-                            </h3>
-                            <div className="flex items-center gap-3 mt-1 text-xs text-slate-500">
-                              <span className="flex items-center gap-1">
-                                <Eye className="w-3 h-3" /> {chapter.views.toLocaleString()}
-                              </span>
-                              <span>{new Date(chapter.created_at * 1000).toLocaleDateString()}</span>
-                            </div>
-                          </div>
-                          <ChevronDown className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 transition rotate-[-90deg]" />
-                        </Link>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
             {/* Synopsis */}
             {story.description && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
-                <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-cyan-500" /> Synopsis
+              <section ref={chaptersRef} className="card p-6 scroll-mt-32">
+                <h2 className="section-title text-lg mb-3 flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-primary-400" /> Giới thiệu
                 </h2>
-                <div className="relative">
-                  <p className={`text-slate-400 leading-relaxed whitespace-pre-wrap ${descTruncated ? 'line-clamp-6' : ''}`}>
-                    {story.description}
-                  </p>
-                  {story.description.length > 400 && (
-                    <button onClick={() => setShowFullDesc(!showFullDesc)}
-                      className="mt-2 text-sm text-cyan-400 hover:text-cyan-300 flex items-center gap-1 transition">
-                      {showFullDesc ? <><ChevronUp className="w-4 h-4" /> Show Less</> : <><ChevronDown className="w-4 h-4" /> Read More</>}
-                    </button>
-                  )}
-                </div>
-              </div>
+                <p className={`text-ink-300 leading-relaxed whitespace-pre-wrap text-[15px] ${descTruncated ? 'line-clamp-6' : ''}`}>
+                  {story.description}
+                </p>
+                {story.description.length > 400 && (
+                  <button type="button" onClick={() => setShowFullDesc(!showFullDesc)} className="btn btn-ghost btn-sm mt-2 -ml-2">
+                    {showFullDesc ? <><ChevronUp className="w-4 h-4" /> Thu gọn</> : <><ChevronDown className="w-4 h-4" /> Xem thêm</>}
+                  </button>
+                )}
+              </section>
+            )}
+
+            {/* Latest Chapters Preview */}
+            {story.chapters.length > 0 && (
+              <section className="card overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setShowLatestChapters(!showLatestChapters)}
+                  aria-expanded={showLatestChapters}
+                  className="w-full px-6 py-4 flex items-center justify-between hover:bg-ink-900/60 transition group"
+                >
+                  <h2 className="section-title text-lg flex items-center gap-2 group-hover:text-primary-300 transition">
+                    <Clock className="w-5 h-5 text-primary-400" /> Chương mới nhất
+                  </h2>
+                  {showLatestChapters ? <ChevronUp className="w-5 h-5 text-ink-500" /> : <ChevronDown className="w-5 h-5 text-ink-500" />}
+                </button>
+                {showLatestChapters && (
+                  <ul className="divide-y divide-line border-t border-line">
+                    {[...story.chapters].sort((a, b) => b.created_at - a.created_at || b.chapter_number - a.chapter_number).slice(0, 5).map((chapter) => {
+                      const volume = volumes.find(v => v.id === chapter.volume_id);
+                      return (
+                        <li key={chapter.id}>
+                          <Link
+                            to={`/story/${story.id}/chapter/${chapter.chapter_number}`}
+                            className="flex items-center gap-4 px-6 py-3 hover:bg-ink-900/60 transition group"
+                          >
+                            {volume?.cover_url && (
+                              <img src={volume.cover_url} alt="" className="w-10 h-14 rounded-md object-cover border border-line shrink-0" />
+                            )}
+                            <div className="flex-1 min-w-0">
+                              {volume && (
+                                <span className="block text-[11px] font-semibold text-ink-500 uppercase tracking-wider truncate">
+                                  {volume.title || `Tập ${volume.volume_number}`}
+                                </span>
+                              )}
+                              <span className="flex items-center gap-2 font-medium text-ink-200 group-hover:text-primary-300 transition">
+                                {showImageIcons && chapter.has_images && <ChapterImageIcon />}
+                                <span className="truncate">{chapter.title}</span>
+                                {isRecent(chapter.created_at) && <span className="badge bg-rose-500/12 text-rose-500 shrink-0">Mới</span>}
+                              </span>
+                              <span className="flex items-center gap-3 mt-0.5 text-xs text-ink-500">
+                                <span className="flex items-center gap-1"><Eye className="w-3 h-3" /> {formatNumber(chapter.views)}</span>
+                                <span>{timeAgo(chapter.created_at, 30)}</span>
+                              </span>
+                            </div>
+                            <ArrowRight className="w-4 h-4 text-ink-600 group-hover:text-primary-400 transition shrink-0" />
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </section>
             )}
 
             {/* Rate this series */}
             {user && (
-              <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6" style={{ opacity: userCommentsBanned ? 0.5 : 1 }}>
+              <section className="card p-6" style={{ opacity: userCommentsBanned ? 0.6 : 1 }}>
                 {userCommentsBanned && (
-                  <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
-                    ✗ You have been banned from commenting and reviewing
-                  </div>
+                  <Alert kind="error" className="mb-4">Bạn đã bị cấm bình luận và đánh giá</Alert>
                 )}
-                <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                  <Star className="w-5 h-5 text-amber-400" /> Rate this series
+                <h2 className="section-title text-lg mb-4 flex items-center gap-2">
+                  <Star className="w-5 h-5 text-amber-500" /> Đánh giá truyện
                 </h2>
-                
+
                 <div className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Your rating</label>
+                    <span className="label">Điểm của bạn</span>
                     <div className="flex items-center gap-3">
                       <StarRating rating={userRating} onRate={userCommentsBanned ? undefined : handleRate} interactive={!userCommentsBanned} />
                       {userRating > 0 && <span className="text-sm text-amber-400 font-bold">{userRating}/5</span>}
@@ -973,130 +1047,109 @@ export default function StoryPage() {
                   </div>
 
                   <div>
-                    <label className="block text-sm font-medium text-slate-300 mb-2">Your review (optional)</label>
-                    {reviewSuccess && !userCommentsBanned && (
-                      <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
-                        ✓ Review submitted successfully!
-                      </div>
-                    )}
-                    {reviewError && !userCommentsBanned && (
-                      <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
-                        ✗ {reviewError}
-                      </div>
-                    )}
+                    <label htmlFor="review-text" className="label">Nhận xét (không bắt buộc)</label>
+                    {reviewSuccess && !userCommentsBanned && <Alert kind="success" className="mb-3">✓ Đã gửi đánh giá thành công!</Alert>}
+                    {reviewError && !userCommentsBanned && <Alert kind="error" className="mb-3">{reviewError}</Alert>}
                     <textarea
+                      id="review-text"
                       value={reviewText}
                       onChange={(e) => {
                         setReviewText(e.target.value);
                         setReviewError('');
                       }}
-                      placeholder={userCommentsBanned ? "You have been banned from reviewing" : "Share your thoughts about this story (minimum 9 characters)..."}
+                      placeholder={userCommentsBanned ? 'Bạn đã bị cấm đánh giá' : 'Chia sẻ cảm nhận của bạn về bộ truyện (tối thiểu 9 ký tự)…'}
                       disabled={reviewLoading || userCommentsBanned}
-                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="input resize-none h-24"
                     />
-                    <div className="mt-2 flex items-center justify-between">
-                      <span className={`text-xs ${reviewText.trim().length < 9 ? 'text-slate-500' : 'text-emerald-400'}`}>
-                        {reviewText.trim().length}/9 characters
+                    <div className="mt-2 flex items-center justify-between gap-3">
+                      <span className={`text-xs ${reviewText.trim().length < 9 ? 'text-ink-500' : 'text-emerald-400'}`}>
+                        {reviewText.trim().length}/9 ký tự
                       </span>
                       <button
+                        type="button"
                         onClick={submitReview}
-                        disabled={reviewLoading || userRating === 0 || userCommentsBanned}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                          reviewText.trim().length < 9 || userRating === 0 || userCommentsBanned
-                            ? 'bg-slate-800 text-slate-500 cursor-not-allowed'
-                            : 'bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20'
-                        } disabled:opacity-50`}
+                        disabled={reviewLoading || userRating === 0 || userCommentsBanned || reviewText.trim().length < 9}
+                        className="btn btn-primary btn-sm"
+                        title={userRating === 0 ? 'Hãy chọn số sao trước' : undefined}
                       >
-                        {reviewLoading ? 'Submitting...' : 'Submit Review'}
+                        {reviewLoading ? 'Đang gửi…' : 'Gửi đánh giá'}
                       </button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </section>
             )}
 
             {/* User Reviews */}
             {reviews.length > 0 && (
-              <div ref={reviewsRef} className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
-                <h2 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">
-                  Reader Reviews ({reviews.length})
-                </h2>
-                <div className="space-y-4">
+              <section ref={reviewsRef} className="card p-6 scroll-mt-32">
+                <h2 className="section-title text-lg mb-4">Đánh giá của độc giả ({reviews.length})</h2>
+                <ul className="space-y-4">
                   {reviews.map((review, idx) => (
-                    <div key={idx} className="flex gap-3 pb-4 border-b border-slate-700/50 last:border-b-0 last:pb-0">
-                      <div className="flex-shrink-0">
-                        <div className="flex items-center gap-1">
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <Star key={star} className={`w-3.5 h-3.5 ${star <= review.rating ? 'text-amber-400 fill-amber-400' : 'text-slate-700'}`} />
-                          ))}
+                    <li key={idx} className="flex gap-3 pb-4 border-b border-line last:border-b-0 last:pb-0">
+                      {review.avatar_url ? (
+                        <img src={review.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
+                      ) : (
+                        <div className="w-9 h-9 rounded-full bg-ink-900 flex items-center justify-center shrink-0">
+                          <User className="w-4 h-4 text-primary-400" />
                         </div>
-                      </div>
+                      )}
                       <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 mb-1">
-                          {review.avatar_url ? (
-                            <img src={review.avatar_url} alt="" className="w-6 h-6 rounded object-cover" />
-                          ) : (
-                            <div className="w-6 h-6 rounded bg-slate-800 flex items-center justify-center">
-                              <User className="w-3 h-3 text-cyan-500/50" />
-                            </div>
-                          )}
-                          <span className="text-sm font-medium text-slate-300">{review.username}</span>
-                          <span className="text-xs text-slate-600">{timeSince(review.created_at)}</span>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-semibold text-ink-200">{review.username}</span>
+                          <span className="flex items-center gap-0.5" aria-label={`${review.rating} trên 5 sao`}>
+                            {[1, 2, 3, 4, 5].map(star => (
+                              <Star key={star} className={`w-3.5 h-3.5 ${star <= review.rating ? 'text-amber-500 fill-amber-500' : 'text-ink-700'}`} />
+                            ))}
+                          </span>
+                          <span className="text-xs text-ink-500">{timeAgo(review.created_at)}</span>
                           {user?.is_admin && (
-                            <div className="ml-auto flex items-center gap-2">
+                            <div className="ml-auto flex items-center gap-1.5">
                               <button
+                                type="button"
                                 onClick={() => deleteReview(review.user_id)}
-                                className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition flex items-center gap-1"
-                                title="Delete review"
+                                className="btn-icon !w-8 !h-8 hover:!text-red-400 hover:!bg-red-500/10"
+                                title="Xóa đánh giá"
+                                aria-label="Xóa đánh giá"
                               >
-                                <X className="w-3 h-3" />
+                                <X className="w-4 h-4" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => banUserFromComments(review.user_id, review.username)}
                                 disabled={banningUserId === review.user_id}
-                                className="text-xs px-2 py-1 rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Ban user from commenting"
+                                className="btn btn-sm text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                                title="Cấm người dùng bình luận"
                               >
-                                {banningUserId === review.user_id ? 'Banning...' : 'Ban'}
+                                {banningUserId === review.user_id ? 'Đang cấm…' : 'Cấm'}
                               </button>
                             </div>
                           )}
                         </div>
-                        <p className="text-sm text-slate-400 leading-relaxed">{review.review_text}</p>
+                        <p className="text-sm text-ink-300 leading-relaxed mt-1 break-words">{review.review_text}</p>
                       </div>
-                    </div>
+                    </li>
                   ))}
-                </div>
-              </div>
+                </ul>
+              </section>
             )}
           </div>
 
           {/* Right sidebar */}
-          <div className="lg:w-72 shrink-0 space-y-6">
+          <aside className="lg:w-80 shrink-0 space-y-6">
             {/* Additional Notes */}
-            <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-5">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-bold text-slate-300 font-['Rajdhani'] tracking-wide uppercase">Additional Notes</h3>
+            <section className="card p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="text-sm font-bold text-ink-200 font-display">Ghi chú thêm</h2>
                 {user && (user.is_admin || story.author_id === user.id) && !editingNotes && (
-                  <button
-                    onClick={() => setEditingNotes(true)}
-                    className="text-xs px-2 py-1 rounded bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition flex items-center gap-1"
-                  >
-                    <Edit className="w-3 h-3" /> Edit
+                  <button type="button" onClick={() => setEditingNotes(true)} className="btn btn-soft btn-sm">
+                    <Edit className="w-3.5 h-3.5" /> Sửa
                   </button>
                 )}
               </div>
-              
-              {notesSaved && (
-                <div className="mb-3 p-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-xs">
-                  ✓ Notes saved successfully!
-                </div>
-              )}
-              {notesError && (
-                <div className="mb-3 p-2 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-xs">
-                  ✗ {notesError}
-                </div>
-              )}
+
+              {notesSaved && <Alert kind="success" className="mb-3">✓ Đã lưu ghi chú!</Alert>}
+              {notesError && <Alert kind="error" className="mb-3">{notesError}</Alert>}
 
               {editingNotes ? (
                 <div className="space-y-3">
@@ -1104,8 +1157,9 @@ export default function StoryPage() {
                     value={notesText}
                     onChange={(e) => setNotesText(e.target.value)}
                     disabled={notesLoading}
-                    placeholder="Add additional notes about this story..."
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
+                    placeholder="Thêm ghi chú về bộ truyện…"
+                    aria-label="Ghi chú thêm"
+                    className="input resize-none h-28 text-sm"
                   />
                   <div className="flex gap-2 justify-end">
                     <button
@@ -1115,26 +1169,21 @@ export default function StoryPage() {
                         setNotesText(story.additional_notes || '');
                       }}
                       disabled={notesLoading}
-                      className="px-3 py-1.5 rounded-lg border border-slate-700 text-slate-400 hover:border-slate-600 transition text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="btn btn-secondary btn-sm"
                     >
-                      Cancel
+                      Hủy
                     </button>
-                    <button
-                      type="button"
-                      onClick={saveNotes}
-                      disabled={notesLoading}
-                      className="px-3 py-1.5 rounded-lg bg-cyan-500/10 text-cyan-400 hover:bg-cyan-500/20 transition text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {notesLoading ? 'Saving...' : 'Save'}
+                    <button type="button" onClick={saveNotes} disabled={notesLoading} className="btn btn-primary btn-sm">
+                      {notesLoading ? 'Đang lưu…' : 'Lưu'}
                     </button>
                   </div>
                 </div>
               ) : (
-                <p className={`text-sm whitespace-pre-wrap ${notesText ? 'text-slate-400' : 'text-slate-600 italic'}`}>
-                  {notesText || 'No additional notes yet.'}
+                <p className={`text-sm whitespace-pre-wrap leading-relaxed ${notesText ? 'text-ink-300' : 'text-ink-500 italic'}`}>
+                  {notesText || 'Chưa có ghi chú nào.'}
                 </p>
               )}
-            </div>
+            </section>
 
             {/* Latest Comments */}
             {id && (
@@ -1144,63 +1193,55 @@ export default function StoryPage() {
                 isLoading={false}
               />
             )}
-          </div>
+          </aside>
         </div>
       </div>
 
       {/* Volume creation form for admins */}
-      {user?.is_admin && story?.author_id === user?.id && (
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      {canManageChapters && (
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 pb-6">
+          {volumeSuccess && <Alert kind="success" className="mb-4">✓ Đã tạo tập mới!</Alert>}
           {!showVolumeForm ? (
-            <button
-              onClick={() => setShowVolumeForm(true)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 transition text-sm font-medium"
-            >
-              + Create New Volume
+            <button type="button" onClick={() => setShowVolumeForm(true)} className="btn bg-emerald-500/10 text-emerald-400 border border-emerald-500/25 hover:bg-emerald-500/15">
+              <Plus className="w-4 h-4" /> Tạo tập mới
             </button>
           ) : (
-            <div className="bg-[#12121e] rounded-xl border border-slate-800/60 p-6">
-              <h3 className="text-lg font-bold text-slate-100 mb-4 font-['Rajdhani'] tracking-wide">Create New Volume</h3>
-              {volumeSuccess && (
-                <div className="mb-4 p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
-                  ✓ Volume created successfully!
-                </div>
-              )}
-              {volumeError && (
-                <div className="mb-4 p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
-                  ✗ {volumeError}
-                </div>
-              )}
+            <div className="card p-6">
+              <h3 className="section-title text-lg mb-4">Tạo tập mới</h3>
+              {volumeError && <Alert kind="error" className="mb-4">{volumeError}</Alert>}
               <form onSubmit={createVolume} className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Volume Title</label>
+                  <label htmlFor="new-volume-title" className="label">Tên tập</label>
                   <input
+                    id="new-volume-title"
                     type="text"
                     value={volumeForm.title}
                     onChange={(e) => setVolumeForm(v => ({ ...v, title: e.target.value }))}
-                    placeholder="e.g., Arc 1: Beginning"
+                    placeholder="VD: Tập 1: Khởi đầu"
                     disabled={volumeLoading}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="input"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Description (optional)</label>
+                  <label htmlFor="new-volume-desc" className="label">Mô tả (không bắt buộc)</label>
                   <textarea
+                    id="new-volume-desc"
                     value={volumeForm.description}
                     onChange={(e) => setVolumeForm(v => ({ ...v, description: e.target.value }))}
-                    placeholder="Brief description of this volume..."
+                    placeholder="Giới thiệu ngắn về tập này…"
                     disabled={volumeLoading}
-                    className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-24 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="input resize-none h-24"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Cover Image (optional)</label>
+                  <label htmlFor="new-volume-cover" className="label">Ảnh bìa (không bắt buộc)</label>
                   <input
+                    id="new-volume-cover"
                     type="file"
                     accept="image/*"
                     onChange={(e) => setVolumeCover(e.target.files?.[0] || null)}
                     disabled={volumeLoading}
-                    className="block w-full text-slate-400 text-sm file:mr-2 file:px-3 file:py-1 file:rounded file:border-0 file:bg-cyan-500/10 file:text-cyan-400 hover:file:bg-cyan-500/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="block w-full text-ink-400 text-sm file:mr-3 file:px-3 file:py-2 file:rounded-lg file:border-0 file:bg-primary-500/10 file:text-primary-300 file:font-semibold hover:file:bg-primary-500/20 disabled:opacity-50"
                   />
                 </div>
                 <div className="flex gap-2 justify-end">
@@ -1213,16 +1254,12 @@ export default function StoryPage() {
                       setVolumeError('');
                     }}
                     disabled={volumeLoading}
-                    className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
+                    className="btn btn-secondary"
                   >
-                    Cancel
+                    Hủy
                   </button>
-                  <button
-                    type="submit"
-                    disabled={!volumeForm.title.trim() || volumeLoading}
-                    className="px-4 py-2 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 hover:bg-emerald-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
-                  >
-                    {volumeLoading ? 'Creating...' : 'Create Volume'}
+                  <button type="submit" disabled={!volumeForm.title.trim() || volumeLoading} className="btn btn-primary">
+                    {volumeLoading ? 'Đang tạo…' : 'Tạo tập'}
                   </button>
                 </div>
               </form>
@@ -1232,42 +1269,85 @@ export default function StoryPage() {
       )}
 
       {/* Volumes and Chapters section */}
-      <div ref={volumesRef} className="max-w-6xl mx-auto px-4 sm:px-6 pb-12">
-        <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
+      <div ref={volumesRef} id="chapter-list" className="max-w-6xl mx-auto px-4 sm:px-6 pb-8 scroll-mt-32">
+        <section className="card overflow-hidden">
           {/* Header */}
-          <div className="flex items-start gap-4 p-6 border-b border-slate-800/40">
-            {story.cover_url && (
-              <img src={story.cover_url} alt="" className="w-16 h-22 rounded-lg object-cover border border-slate-700/50 shrink-0 hidden sm:block" />
-            )}
-            <div className="flex-1 min-w-0">
-              <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-                <List className="w-5 h-5 text-cyan-500" /> {volumes.length > 0 ? 'Volumes' : 'Chapters'}
-              </h2>
-              <div className="flex items-center gap-3 mt-1.5 text-xs text-slate-500">
-                <span className="flex items-center gap-1 px-2 py-0.5 bg-cyan-500/10 text-cyan-400 rounded border border-cyan-500/20 font-semibold">
-                  {volumes.length > 0 ? `${volumes.length} volumes` : `${story.chapter_count} chapters`}
-                </span>
-                {story.chapters.length > 0 && (
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    Last updated {timeSince(story.chapters[story.chapters.length - 1].created_at)}
-                  </span>
-                )}
+          <div className="p-5 sm:p-6 border-b border-line space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="section-title text-xl flex items-center gap-2">
+                  <List className="w-5 h-5 text-primary-400" /> {volumes.length > 0 ? 'Danh sách tập' : 'Danh sách chương'}
+                </h2>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1 text-xs text-ink-500">
+                  {volumes.length > 0 && <span>{volumes.length} tập</span>}
+                  <span>{formatNumber(story.chapter_count)} chương</span>
+                  {lastUpdated && <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" /> Cập nhật {timeAgo(lastUpdated, 30)}</span>}
+                  {hasIllustratedChapters && <span className="flex items-center gap-1.5"><ChapterImageIcon className="!w-4 !h-4" /> = có hình minh họa</span>}
+                </div>
               </div>
+              {reorderingLoading && <span className="text-xs text-primary-300">Đang sắp xếp…</span>}
             </div>
+
+            {story.chapters.length > 0 && (
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="relative flex-1">
+                  <label htmlFor="chapter-search" className="sr-only">Tìm chương</label>
+                  <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-ink-500 pointer-events-none" />
+                  <input
+                    id="chapter-search"
+                    type="search"
+                    value={chapterQuery}
+                    onChange={e => setChapterQuery(e.target.value)}
+                    placeholder="Tìm theo tên hoặc số chương…"
+                    className="input pl-10 !min-h-10 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto no-scrollbar">
+                  <div className="flex gap-1.5" role="group" aria-label="Lọc chương">
+                    {filterOptions.map(opt => (
+                      <button key={opt.value} type="button" onClick={() => setChapterFilter(opt.value)} aria-pressed={chapterFilter === opt.value} className="chip !min-h-10">
+                        {opt.value === 'images' && <Image className="w-3.5 h-3.5" />}
+                        {opt.label}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setNewestFirst(v => !v)}
+                    className="chip !min-h-10"
+                    aria-pressed={newestFirst}
+                    title="Đổi thứ tự sắp xếp"
+                  >
+                    <ArrowUpDown className="w-3.5 h-3.5" /> {newestFirst ? 'Mới nhất' : 'Cũ nhất'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           {story.chapters.length === 0 && volumes.length === 0 ? (
-            <p className="text-slate-600 text-center py-16">No chapters published yet. Stay tuned!</p>
+            <p className="text-ink-500 text-center py-16">Chưa có chương nào được đăng. Hãy quay lại sau nhé!</p>
+          ) : isFiltering && !story.chapters.some(matchesFilter) ? (
+            <div className="text-center py-14 px-6">
+              <p className="text-ink-400">Không có chương nào phù hợp.</p>
+              <button type="button" onClick={() => { setChapterQuery(''); setChapterFilter('all'); }} className="btn btn-ghost btn-sm mt-3">Xóa bộ lọc</button>
+            </div>
           ) : volumes.length > 0 ? (
-            <div className="divide-y divide-slate-800/30">
-              {volumes.map((vol) => {
-                const volChapters = story.chapters.filter(ch => ch.volume_id === vol.id);
+            <div className="divide-y divide-line">
+              {ordered(volumes).map((vol) => {
+                const allVolChapters = story.chapters.filter(ch => ch.volume_id === vol.id);
+                const volChapters = ordered(allVolChapters.filter(matchesFilter));
+                if (isFiltering && volChapters.length === 0) return null;
+                const isExpanded = isFiltering || expandedVolumes.has(vol.id);
+                const showAll = isFiltering || expandedChapterLists.has(vol.id);
+                const volRead = allVolChapters.filter(ch => readIds.has(ch.id)).length;
+                const volIllustrated = showImageIcons && allVolChapters.some(ch => ch.has_images);
                 return (
                   <div key={vol.id}>
                     {/* Volume header - cover image and title */}
-                    <div className="flex items-center gap-2 px-6 py-4 hover:bg-cyan-500/[0.03] transition group">
+                    <div className="flex items-center gap-2 px-4 sm:px-6 py-4 hover:bg-ink-900/50 transition group">
                       <button
+                        type="button"
                         onClick={() => {
                           const newExpanded = new Set(expandedVolumes);
                           if (newExpanded.has(vol.id)) {
@@ -1277,24 +1357,38 @@ export default function StoryPage() {
                           }
                           setExpandedVolumes(newExpanded);
                         }}
-                        className="flex-1 flex items-center gap-4 text-left"
+                        aria-expanded={isExpanded}
+                        className="flex-1 flex items-center gap-4 text-left min-w-0"
                       >
-                        {vol.cover_url && (
-                          <img src={vol.cover_url} alt="" className="w-32 h-48 rounded-lg object-cover border border-slate-700/50 shrink-0" />
+                        {vol.cover_url ? (
+                          <img src={vol.cover_url} alt="" className="w-16 h-24 sm:w-24 sm:h-36 rounded-xl object-cover border border-line shrink-0 shadow-sm" />
+                        ) : (
+                          <div className="w-16 h-24 sm:w-24 sm:h-36 rounded-xl bg-ink-900 border border-line shrink-0 flex items-center justify-center">
+                            <BookOpen className="w-6 h-6 text-ink-600" />
+                          </div>
                         )}
                         <div className="min-w-0 flex-1">
-                          <span className="text-lg font-bold text-slate-300 group-hover:text-cyan-400 transition block">
-                            {vol.title || `Volume ${vol.volume_number}`}
+                          <span className="block text-[11px] font-semibold text-primary-400 uppercase tracking-wider">Tập {vol.volume_number}</span>
+                          <span className="text-base sm:text-lg font-bold text-ink-100 group-hover:text-primary-300 transition block font-display leading-snug">
+                            {vol.title || `Tập ${vol.volume_number}`}
+                          </span>
+                          <span className="flex flex-wrap items-center gap-x-3 gap-y-1 mt-1.5 text-xs text-ink-500">
+                            <span>{allVolChapters.length} chương</span>
+                            {volRead > 0 && <span className="flex items-center gap-1 text-emerald-400"><Check className="w-3.5 h-3.5" /> Đã đọc {volRead}/{allVolChapters.length}</span>}
+                            {volIllustrated && <span className="flex items-center gap-1"><Image className="w-3.5 h-3.5 text-amber-500" /> Có minh họa</span>}
                           </span>
                         </div>
+                        <ChevronDown className={`w-5 h-5 text-ink-500 shrink-0 transition-transform ${isExpanded ? 'rotate-180' : ''}`} />
                       </button>
-                      
+
                       {/* Edit button - only show for story author */}
-                      {user?.id === story?.author_id && (
+                      {isAuthor && (
                         <button
+                          type="button"
                           onClick={() => initializeEditVolumeForm(vol)}
-                          className="shrink-0 p-2 text-slate-500 hover:text-cyan-400 hover:bg-cyan-500/5 rounded transition"
-                          title="Edit volume"
+                          className="btn-icon shrink-0"
+                          title="Sửa tập"
+                          aria-label="Sửa tập"
                         >
                           <Edit className="w-5 h-5" />
                         </button>
@@ -1302,12 +1396,13 @@ export default function StoryPage() {
                     </div>
 
                     {/* Expanded volume content */}
-                    {expandedVolumes.has(vol.id) && (
-                      <div className="bg-slate-900/20 divide-y divide-slate-800/20">
+                    {isExpanded && (
+                      <div className="bg-ink-950/60 border-t border-line">
                         {/* Collapsible Description Section */}
-                        {vol.description && (
-                          <div>
+                        {vol.description && !isFiltering && (
+                          <div className="border-b border-line">
                             <button
+                              type="button"
                               onClick={() => {
                                 const newExpanded = new Set(expandedVolumeDescriptions);
                                 if (newExpanded.has(vol.id)) {
@@ -1317,206 +1412,110 @@ export default function StoryPage() {
                                 }
                                 setExpandedVolumeDescriptions(newExpanded);
                               }}
-                              className="w-full px-6 py-4 flex items-center justify-between hover:bg-cyan-500/[0.03] transition group"
+                              aria-expanded={expandedVolumeDescriptions.has(vol.id)}
+                              className="w-full px-4 sm:px-6 py-3 flex items-center justify-between hover:bg-ink-900/60 transition group"
                             >
-                              <span className="text-sm font-medium text-slate-400 group-hover:text-cyan-400 transition">
-                                Volume Description
+                              <span className="text-sm font-medium text-ink-400 group-hover:text-primary-300 transition">
+                                Giới thiệu tập
                               </span>
-                              {expandedVolumeDescriptions.has(vol.id) ? (
-                                <ChevronUp className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
-                              ) : (
-                                <ChevronDown className="w-5 h-5 text-slate-500 group-hover:text-cyan-400 transition" />
-                              )}
+                              <ChevronDown className={`w-4 h-4 text-ink-500 transition-transform ${expandedVolumeDescriptions.has(vol.id) ? 'rotate-180' : ''}`} />
                             </button>
                             {expandedVolumeDescriptions.has(vol.id) && (
-                              <div className="px-6 py-4 bg-slate-800/20 text-slate-300 text-sm leading-relaxed whitespace-pre-wrap">
+                              <div className="px-4 sm:px-6 pb-4 text-ink-300 text-sm leading-relaxed whitespace-pre-wrap">
                                 {vol.description}
                               </div>
                             )}
                           </div>
                         )}
-                        
+
                         {/* Edit volume form - shown when editing */}
                         {editingVolumeId === vol.id && (
-                          <div className="p-6 space-y-4 bg-slate-800/30 border-b border-slate-800/40">
+                          <div className="p-6 space-y-4 bg-surface border-b border-line">
                             <div className="flex justify-between items-center">
-                              <h4 className="font-bold text-slate-200">Edit Volume</h4>
-                              <button
-                                onClick={() => setEditingVolumeId(null)}
-                                className="text-slate-500 hover:text-slate-300"
-                              >
+                              <h4 className="font-bold text-ink-100">Sửa thông tin tập</h4>
+                              <button type="button" onClick={() => setEditingVolumeId(null)} className="btn-icon" aria-label="Đóng">
                                 <X className="w-4 h-4" />
                               </button>
                             </div>
-                            
-                            {editVolumeError && (
-                              <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
-                                ✗ {editVolumeError}
-                              </div>
-                            )}
-                            
-                            {editVolumeSuccess && (
-                              <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
-                                ✓ Volume updated successfully!
-                              </div>
-                            )}
-                            
+
+                            {editVolumeError && <Alert kind="error">{editVolumeError}</Alert>}
+                            {editVolumeSuccess && <Alert kind="success">✓ Đã cập nhật tập!</Alert>}
+
                             <form onSubmit={(e) => editVolume(vol.id, e)} className="space-y-4">
                               <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Volume Title</label>
+                                <label htmlFor={`edit-vol-title-${vol.id}`} className="label">Tên tập</label>
                                 <input
+                                  id={`edit-vol-title-${vol.id}`}
                                   type="text"
                                   value={editVolumeForm.title}
                                   onChange={(e) => setEditVolumeForm(prev => ({ ...prev, title: e.target.value }))}
-                                  placeholder="e.g., Arc 1: The Beginning"
+                                  placeholder="VD: Tập 1: Khởi đầu"
                                   disabled={editVolumeLoading}
-                                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                                  className="input"
                                 />
                               </div>
-                              
+
                               <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
+                                <label htmlFor={`edit-vol-desc-${vol.id}`} className="label">Mô tả</label>
                                 <textarea
+                                  id={`edit-vol-desc-${vol.id}`}
                                   value={editVolumeForm.description}
                                   onChange={(e) => setEditVolumeForm(prev => ({ ...prev, description: e.target.value }))}
-                                  placeholder="Brief description of this volume..."
+                                  placeholder="Giới thiệu ngắn về tập này…"
                                   disabled={editVolumeLoading}
                                   rows={3}
-                                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
+                                  className="input resize-none"
                                 />
                               </div>
-                              
+
                               <div>
-                                <label className="block text-sm font-medium text-slate-300 mb-2">Cover Image</label>
+                                <span className="label">Ảnh bìa</span>
                                 {editVolumeCoverPreview && (
-                                  <div className="mb-3 relative inline-block">
-                                    <img src={editVolumeCoverPreview} alt="" className="w-24 h-32 rounded-lg object-cover border border-slate-700" />
+                                  <div className="mb-3 relative inline-block group/cover">
+                                    <img src={editVolumeCoverPreview} alt="" className="w-24 h-32 rounded-lg object-cover border border-line" />
                                     <button
                                       type="button"
                                       onClick={() => {
                                         setEditVolumeCover(null);
                                         setEditVolumeCoverPreview('');
                                       }}
-                                      className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 hover:opacity-100 transition"
+                                      className="absolute top-1 right-1 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center opacity-80 hover:opacity-100 transition"
+                                      aria-label="Bỏ ảnh bìa đã chọn"
                                     >
-                                      <X className="w-3 h-3" />
+                                      <X className="w-3.5 h-3.5" />
                                     </button>
                                   </div>
                                 )}
-                                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
-                                  <Image className="w-8 h-8 text-slate-600 mb-2" />
-                                  <span className="text-sm text-slate-500">Click to change cover image</span>
-                                  <input
-                                    type="file"
-                                    accept="image/*"
-                                    onChange={handleEditVolumeCover}
-                                    disabled={editVolumeLoading}
-                                    className="hidden"
-                                  />
+                                <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-ink-700 rounded-xl cursor-pointer hover:border-primary-500/50 transition">
+                                  <Image className="w-7 h-7 text-ink-500 mb-1.5" />
+                                  <span className="text-sm text-ink-400">Nhấn để đổi ảnh bìa</span>
+                                  <input type="file" accept="image/*" onChange={handleEditVolumeCover} disabled={editVolumeLoading} className="hidden" />
                                 </label>
                               </div>
-                              
+
                               <div className="flex gap-2 justify-end pt-2">
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingVolumeId(null)}
-                                  disabled={editVolumeLoading}
-                                  className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition text-sm font-medium"
-                                >
-                                  Cancel
+                                <button type="button" onClick={() => setEditingVolumeId(null)} disabled={editVolumeLoading} className="btn btn-secondary">
+                                  Hủy
                                 </button>
-                                <button
-                                  type="submit"
-                                  disabled={!editVolumeForm.title.trim() || editVolumeLoading}
-                                  className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 transition text-sm font-medium"
-                                >
-                                  {editVolumeLoading ? 'Updating...' : 'Save Changes'}
+                                <button type="submit" disabled={!editVolumeForm.title.trim() || editVolumeLoading} className="btn btn-primary">
+                                  {editVolumeLoading ? 'Đang lưu…' : 'Lưu thay đổi'}
                                 </button>
                               </div>
                             </form>
                           </div>
                         )}
-                        
-                        {/* Chapter list - shown first */}
+
+                        {/* Chapter list */}
                         {volChapters.length === 0 ? (
-                          <p className="text-slate-600 text-center py-6 text-sm">No chapters in this volume yet</p>
+                          <p className="text-ink-500 text-center py-6 text-sm">Tập này chưa có chương nào</p>
                         ) : (
                           <>
-                            {volChapters.slice(0, expandedChapterLists.has(vol.id) ? volChapters.length : 5).map(ch => {
-                              // Check if chapter is new (created within last 7 days)
-                              const isNew = (Date.now() / 1000 - ch.created_at) < 7 * 24 * 3600;
-                              const isDragging = draggedChapterId === ch.id;
-                              const isDraggedOver = draggedOverChapterId === ch.id;
-                              
-                              return user?.is_admin ? (
-                                <div
-                                  key={ch.id}
-                                  draggable
-                                  onDragStart={(e) => handleChapterDragStart(e, ch.id)}
-                                  onDragOver={handleChapterDragOver}
-                                  onDragEnter={(e) => handleChapterDragEnter(e, ch.id)}
-                                  onDragLeave={handleChapterDragLeave}
-                                  onDrop={(e) => handleChapterDrop(e, ch.id, vol.id)}
-                                  className={`flex items-center justify-between px-6 py-3.5 transition group cursor-move ${
-                                    isDragging ? 'opacity-50 bg-cyan-500/10' : 
-                                    isDraggedOver ? 'bg-cyan-500/20 border-t-2 border-cyan-400' : 
-                                    'hover:bg-cyan-500/[0.03]'
-                                  }`}
-                                >
-                                  <Link
-                                    to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                                    onClick={(e) => reorderingLoading && e.preventDefault()}
-                                    className="flex items-center justify-between w-full"
-                                  >
-                                    <div className="flex items-center gap-3 min-w-0">
-                                      {isNew && (
-                                        <span className="text-xs font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
-                                          Mới
-                                        </span>
-                                      )}
-                                      <div className="min-w-0">
-                                        <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition block">
-                                          {ch.title}
-                                        </span>
-                                      </div>
-                                    </div>
-                                    <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0 ml-4">
-                                      <span className="min-w-[75px] text-right">
-                                        {new Date(ch.created_at * 1000).toLocaleDateString('vi-VN')}
-                                      </span>
-                                      <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                                    </div>
-                                  </Link>
-                                </div>
-                              ) : (
-                                <Link
-                                  key={ch.id}
-                                  to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group"
-                                >
-                                  <div className="flex items-center gap-3 min-w-0">
-                                    {isNew && (
-                                      <span className="text-xs font-bold text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded border border-red-500/30 shrink-0">
-                                        Mới
-                                      </span>
-                                    )}
-                                    <div className="min-w-0">
-                                      <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition block">
-                                        {ch.title}
-                                      </span>
-                                    </div>
-                                  </div>
-                                  <div className="flex items-center gap-2 text-xs text-slate-600 shrink-0 ml-4">
-                                    <span className="min-w-[75px] text-right">
-                                      {new Date(ch.created_at * 1000).toLocaleDateString('vi-VN')}
-                                    </span>
-                                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                                  </div>
-                                </Link>
-                              );
-                            })}
-                            {volChapters.length > 5 && (
+                            <ul className="divide-y divide-line">
+                              {volChapters.slice(0, showAll ? volChapters.length : 5).map(ch => renderChapterRow(ch, vol.id))}
+                            </ul>
+                            {!isFiltering && volChapters.length > 5 && (
                               <button
+                                type="button"
                                 onClick={() => {
                                   const newExpanded = new Set(expandedChapterLists);
                                   if (newExpanded.has(vol.id)) {
@@ -1526,96 +1525,93 @@ export default function StoryPage() {
                                   }
                                   setExpandedChapterLists(newExpanded);
                                 }}
-                                className="w-full px-6 py-3 text-center text-cyan-400 hover:bg-cyan-500/5 transition text-sm font-medium border-t border-slate-800/20"
+                                className="w-full px-6 py-3 flex items-center justify-center gap-1.5 text-primary-300 hover:bg-primary-500/5 transition text-sm font-semibold border-t border-line"
                               >
-                                {expandedChapterLists.has(vol.id) 
-                                  ? 'Ẩn các chương' 
-                                  : `Xem tiếp (${volChapters.length - 5} chương)`}
+                                {expandedChapterLists.has(vol.id)
+                                  ? <><ChevronUp className="w-4 h-4" /> Thu gọn</>
+                                  : <><ChevronDown className="w-4 h-4" /> Xem thêm {volChapters.length - 5} chương</>}
                               </button>
                             )}
                           </>
                         )}
 
                         {/* Chapter creation form for admins - shown below chapter list */}
-                        {user?.is_admin && story?.author_id === user?.id && (
-                          <div>
+                        {canManageChapters && !isFiltering && (
+                          <div className="border-t border-line">
                             {!expandedChapterForms.has(vol.id) ? (
                               <button
+                                type="button"
                                 onClick={() => {
                                   initializeChapterForm(vol.id);
                                   setExpandedChapterForms(prev => new Set([...prev, vol.id]));
                                 }}
-                                className="w-full px-6 py-3 flex items-center gap-2 text-cyan-400 hover:bg-cyan-500/5 transition text-sm font-medium"
+                                className="w-full px-6 py-3 flex items-center gap-2 text-primary-300 hover:bg-primary-500/5 transition text-sm font-semibold"
                               >
-                                <Plus className="w-4 h-4" /> Create Chapter in This Volume
+                                <Plus className="w-4 h-4" /> Thêm chương vào tập này
                               </button>
                             ) : (
-                              <div className="p-6 space-y-4">
+                              <div className="p-6 space-y-4 bg-surface">
                                 <div className="flex justify-between items-center">
-                                  <h4 className="font-bold text-slate-200">Create New Chapter</h4>
+                                  <h4 className="font-bold text-ink-100">Thêm chương mới</h4>
                                   <button
+                                    type="button"
                                     onClick={() => setExpandedChapterForms(prev => {
                                       const newSet = new Set(prev);
                                       newSet.delete(vol.id);
                                       return newSet;
                                     })}
-                                    className="text-slate-500 hover:text-slate-300"
+                                    className="btn-icon"
+                                    aria-label="Đóng"
                                   >
                                     <X className="w-4 h-4" />
                                   </button>
                                 </div>
 
-                                {chapterSuccess[vol.id] && (
-                                  <div className="p-3 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 text-sm">
-                                    ✓ Chapter created successfully!
-                                  </div>
-                                )}
-                                {chapterErrors[vol.id] && (
-                                  <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
-                                    ✗ {chapterErrors[vol.id]}
-                                  </div>
-                                )}
+                                {chapterSuccess[vol.id] && <Alert kind="success">✓ Đã tạo chương mới!</Alert>}
+                                {chapterErrors[vol.id] && <Alert kind="error">{chapterErrors[vol.id]}</Alert>}
 
                                 <form onSubmit={(e) => createChapter(vol.id, e)} className="space-y-4">
                                   <div>
-                                    <label className="block text-sm font-medium text-slate-300 mb-1">Chapter Title</label>
+                                    <label htmlFor={`new-ch-title-${vol.id}`} className="label">Tiêu đề chương</label>
                                     <input
+                                      id={`new-ch-title-${vol.id}`}
                                       type="text"
                                       value={chapterForms[vol.id]?.title || ''}
                                       onChange={(e) => setChapterForms(prev => ({
                                         ...prev,
                                         [vol.id]: { ...prev[vol.id], title: e.target.value }
                                       }))}
-                                      placeholder="Enter chapter title (required)"
+                                      placeholder="Nhập tiêu đề chương (bắt buộc)"
                                       disabled={chapterLoading[vol.id]}
-                                      className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 disabled:opacity-50"
+                                      className="input"
                                     />
                                   </div>
 
                                   {story.type === 'text' ? (
                                     <div className="space-y-4">
                                       <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-1">Content</label>
+                                        <label htmlFor={`new-ch-content-${vol.id}`} className="label">Nội dung</label>
                                         <textarea
+                                          id={`new-ch-content-${vol.id}`}
                                           ref={(el) => { if (el) textareaRefs.current[vol.id] = el; }}
                                           value={chapterForms[vol.id]?.content || ''}
                                           onChange={(e) => setChapterForms(prev => ({
                                             ...prev,
                                             [vol.id]: { ...prev[vol.id], content: e.target.value }
                                           }))}
-                                          placeholder="Write chapter content here... You can insert images below."
+                                          placeholder="Viết nội dung chương tại đây… Bạn có thể chèn hình ảnh ở bên dưới."
                                           disabled={chapterLoading[vol.id]}
                                           rows={10}
-                                          className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none disabled:opacity-50"
+                                          className="input resize-y font-mono text-sm leading-relaxed"
                                         />
                                       </div>
 
                                       <div>
-                                        <label className="block text-sm font-medium text-slate-300 mb-2">Insert Images into Content</label>
-                                        <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
-                                          <Image className="w-6 h-6 text-slate-600 mb-1" />
-                                          <span className="text-sm text-slate-500">Click to add images</span>
-                                          <span className="text-xs text-slate-600 mt-1">Images will be inserted into your content</span>
+                                        <span className="label">Chèn hình ảnh vào nội dung</span>
+                                        <label className="flex flex-col items-center justify-center p-4 border-2 border-dashed border-ink-700 rounded-xl cursor-pointer hover:border-primary-500/50 transition">
+                                          <Image className="w-6 h-6 text-ink-500 mb-1" />
+                                          <span className="text-sm text-ink-400">Nhấn để thêm hình ảnh</span>
+                                          <span className="text-xs text-ink-500 mt-1">Hình ảnh sẽ được chèn vào nội dung chương</span>
                                           <input
                                             type="file"
                                             accept="image/*"
@@ -1628,7 +1624,7 @@ export default function StoryPage() {
 
                                         {(chapterPreviews[vol.id] || []).length > 0 && (
                                           <div className="mt-3 space-y-2">
-                                            <p className="text-xs text-slate-400">Click an image to insert it into your content:</p>
+                                            <p className="text-xs text-ink-400">Nhấn vào một hình để chèn vào vị trí con trỏ:</p>
                                             <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                               {chapterPreviews[vol.id].map((src, i) => (
                                                 <div key={i} className="relative group">
@@ -1642,15 +1638,16 @@ export default function StoryPage() {
                                                     }}
                                                     className="w-full text-left"
                                                   >
-                                                    <img src={src} alt={`Image ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border border-slate-700 hover:border-cyan-500 transition group-hover:opacity-75" />
+                                                    <img src={src} alt={`Hình ${i + 1}`} className="w-full aspect-square object-cover rounded-lg border border-line hover:border-primary-500 transition group-hover:opacity-75" />
                                                     <span className="absolute inset-0 flex items-center justify-center bg-black/50 text-white text-xs font-medium opacity-0 group-hover:opacity-100 transition rounded-lg">
-                                                      Click to insert
+                                                      Nhấn để chèn
                                                     </span>
                                                   </button>
                                                   <button
                                                     type="button"
                                                     onClick={() => removeChapterImage(vol.id, i)}
-                                                    className="absolute top-1 right-1 w-5 h-5 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition text-xs"
+                                                    className="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                                                    aria-label={`Bỏ hình ${i + 1}`}
                                                   >
                                                     <X className="w-3 h-3" />
                                                   </button>
@@ -1663,11 +1660,11 @@ export default function StoryPage() {
                                     </div>
                                   ) : (
                                     <div>
-                                      <label className="block text-sm font-medium text-slate-300 mb-1">Upload Pages</label>
-                                      <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-slate-700 rounded-lg cursor-pointer hover:border-cyan-500/40 transition">
-                                        <Image className="w-8 h-8 text-slate-600 mb-2" />
-                                        <span className="text-sm text-slate-500">Click to upload images</span>
-                                        <span className="text-xs text-slate-600 mt-1">PNG, JPG, WebP up to 10MB each</span>
+                                      <span className="label">Tải lên các trang</span>
+                                      <label className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-ink-700 rounded-xl cursor-pointer hover:border-primary-500/50 transition">
+                                        <Image className="w-8 h-8 text-ink-500 mb-2" />
+                                        <span className="text-sm text-ink-400">Nhấn để tải hình ảnh lên</span>
+                                        <span className="text-xs text-ink-500 mt-1">PNG, JPG, WebP, tối đa 10MB mỗi ảnh</span>
                                         <input
                                           type="file"
                                           accept="image/*"
@@ -1682,14 +1679,15 @@ export default function StoryPage() {
                                         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3 mt-4">
                                           {chapterPreviews[vol.id].map((src, i) => (
                                             <div key={i} className="relative group">
-                                              <img src={src} alt={`Page ${i + 1}`} className="w-full aspect-[3/4] object-cover rounded-lg border border-slate-800/60" />
-                                              <span className="absolute bottom-2 left-2 bg-black/60 text-slate-300 text-xs px-2 py-0.5 rounded">{i + 1}</span>
+                                              <img src={src} alt={`Trang ${i + 1}`} className="w-full aspect-[3/4] object-cover rounded-lg border border-line" />
+                                              <span className="absolute bottom-2 left-2 bg-black/60 text-white text-xs px-2 py-0.5 rounded">{i + 1}</span>
                                               <button
                                                 type="button"
                                                 onClick={() => removeChapterImage(vol.id, i)}
-                                                className="absolute top-2 right-2 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition"
+                                                className="absolute top-2 right-2 w-7 h-7 bg-red-500 text-white rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 focus:opacity-100 transition"
+                                                aria-label={`Bỏ trang ${i + 1}`}
                                               >
-                                                <X className="w-3 h-3" />
+                                                <X className="w-3.5 h-3.5" />
                                               </button>
                                             </div>
                                           ))}
@@ -1712,16 +1710,12 @@ export default function StoryPage() {
                                         setChapterErrors(prev => ({ ...prev, [vol.id]: '' }));
                                       }}
                                       disabled={chapterLoading[vol.id]}
-                                      className="px-4 py-2 rounded-lg bg-slate-800 text-slate-300 hover:bg-slate-700 disabled:opacity-50 transition text-sm font-medium"
+                                      className="btn btn-secondary"
                                     >
-                                      Cancel
+                                      Hủy
                                     </button>
-                                    <button
-                                      type="submit"
-                                      disabled={!chapterForms[vol.id]?.title.trim() || chapterLoading[vol.id]}
-                                      className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 transition text-sm font-medium"
-                                    >
-                                      {chapterLoading[vol.id] ? 'Publishing...' : 'Publish Chapter'}
+                                    <button type="submit" disabled={!chapterForms[vol.id]?.title.trim() || chapterLoading[vol.id]} className="btn btn-primary">
+                                      {chapterLoading[vol.id] ? 'Đang đăng…' : 'Đăng chương'}
                                     </button>
                                   </div>
                                 </form>
@@ -1736,140 +1730,113 @@ export default function StoryPage() {
               })}
             </div>
           ) : (
-            <div ref={chaptersRef} className="divide-y divide-slate-800/30">
-              {story.chapters.map(ch => (
-                <Link key={ch.id} to={`/story/${story.id}/chapter/${ch.chapter_number}`}
-                  className="flex items-center justify-between px-6 py-3.5 hover:bg-cyan-500/[0.03] transition group">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span className="w-9 h-9 rounded-lg bg-slate-800/80 text-cyan-400/80 flex items-center justify-center text-sm font-bold shrink-0 font-['Rajdhani'] group-hover:bg-cyan-500/10 group-hover:text-cyan-400 transition">
-                      {ch.chapter_number}
-                    </span>
-                    <div className="min-w-0">
-                      <span className="font-medium text-slate-300 group-hover:text-cyan-400 transition truncate block">
-                        {ch.title}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-4 text-xs text-slate-600 shrink-0 ml-4">
-                    <span className="hidden sm:flex items-center gap-1"><Eye className="w-3.5 h-3.5" />{ch.views}</span>
-                    <span className="flex items-center gap-1 min-w-[70px] justify-end">
-                      <Clock className="w-3.5 h-3.5" />{new Date(ch.created_at * 1000).toLocaleDateString()}
-                    </span>
-                    <ArrowRight className="w-4 h-4 opacity-0 group-hover:opacity-100 transition text-cyan-400" />
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <ul className="divide-y divide-line">
+              {ordered(story.chapters.filter(matchesFilter)).map(ch => renderChapterRow(ch))}
+            </ul>
           )}
-        </div>
+        </section>
       </div>
 
       {/* Comments section */}
-      <div ref={commentsRef} className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-        <div className="bg-[#12121e] rounded-xl border border-slate-800/60 overflow-hidden">
-          <div className="p-6 border-b border-slate-800/40">
-            <h2 className="text-xl font-bold text-slate-100 font-['Rajdhani'] tracking-wide flex items-center gap-2">
-              <MessageCircle className="w-5 h-5 text-cyan-500" /> Comments
+      <div ref={commentsRef} className="max-w-6xl mx-auto px-4 sm:px-6 pb-12 scroll-mt-32">
+        <section className="card overflow-hidden">
+          <div className="px-6 py-5 border-b border-line">
+            <h2 className="section-title text-xl flex items-center gap-2">
+              <MessageCircle className="w-5 h-5 text-primary-400" /> Bình luận <span className="text-ink-500 font-medium text-base">({comments.length})</span>
             </h2>
           </div>
 
           <div className="p-6">
-            {/* Ban notice */}
             {userCommentsBanned && (
-              <div className="mb-6 p-4 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
-                ✗ You have been banned from commenting and reviewing
-              </div>
+              <Alert kind="error" className="mb-6">Bạn đã bị cấm bình luận và đánh giá</Alert>
             )}
 
             {/* Comment form */}
             {user ? (
-              <form onSubmit={addComment} className="mb-6 space-y-3" style={{ opacity: userCommentsBanned ? 0.5 : 1 }}>
-                {commentError && !userCommentsBanned && (
-                  <div className="p-3 rounded-lg bg-red-500/10 text-red-400 border border-red-500/20 text-sm">
-                    ✗ {commentError}
-                  </div>
-                )}
+              <form onSubmit={addComment} className="mb-8 space-y-3" style={{ opacity: userCommentsBanned ? 0.6 : 1 }}>
+                {commentError && !userCommentsBanned && <Alert kind="error">{commentError}</Alert>}
+                <label htmlFor="story-comment" className="sr-only">Bình luận của bạn</label>
                 <textarea
+                  id="story-comment"
                   value={newComment}
                   onChange={(e) => setNewComment(e.target.value)}
-                  placeholder={userCommentsBanned ? "You have been banned from commenting" : "Share your thoughts about this story..."}
+                  placeholder={userCommentsBanned ? 'Bạn đã bị cấm bình luận' : 'Chia sẻ cảm nghĩ của bạn về bộ truyện…'}
                   disabled={commentLoading || userCommentsBanned}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 placeholder-slate-600 focus:outline-none focus:border-cyan-500 resize-none h-20 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="input resize-none h-24"
                 />
                 <div className="flex justify-end">
-                  <button
-                    type="submit"
-                    disabled={!newComment.trim() || commentLoading || userCommentsBanned}
-                    className="px-4 py-2 rounded-lg bg-cyan-500/10 text-cyan-400 border border-cyan-500/20 hover:bg-cyan-500/15 disabled:opacity-50 disabled:cursor-not-allowed transition text-sm font-medium"
-                  >
-                    {commentLoading ? 'Posting...' : 'Post Comment'}
+                  <button type="submit" disabled={!newComment.trim() || commentLoading || userCommentsBanned} className="btn btn-primary">
+                    {commentLoading ? 'Đang gửi…' : 'Gửi bình luận'}
                   </button>
                 </div>
               </form>
             ) : (
-              <div className="mb-6 p-4 rounded-lg bg-slate-900/50 border border-slate-700/50 text-slate-400 text-sm text-center">
-                <Link to="/login" className="text-cyan-400 hover:text-cyan-300 font-medium">
-                  Sign in
-                </Link>
-                {' '}to comment on this story
+              <div className="mb-8 p-4 rounded-xl bg-ink-900/60 border border-dashed border-line text-ink-400 text-sm text-center">
+                <Link to="/login" className="text-primary-300 hover:underline font-semibold">Đăng nhập</Link>
+                {' '}để bình luận về bộ truyện này
               </div>
             )}
 
             {/* Comments list */}
             {comments.length === 0 ? (
-              <p className="text-slate-600 text-center py-8">No comments yet. Be the first to comment!</p>
+              <p className="text-ink-500 text-center py-8">Chưa có bình luận nào. Hãy là người đầu tiên!</p>
             ) : (
-              <div className="space-y-4 divide-y divide-slate-800/30">
+              <ul className="space-y-3">
                 {comments.map(comment => (
-                  <div 
-                    key={comment.id} 
-                    className={`pt-4 first:pt-0 group rounded-lg p-3 border ${
-                      comment.pinned ? 'pinned-comment border-amber-600' : 'border-transparent'
+                  <li
+                    key={comment.id}
+                    id={`comment-${comment.id}`}
+                    className={`group rounded-xl p-3 sm:p-4 border transition scroll-mt-32 ${
+                      comment.pinned ? 'pinned-comment' : 'border-transparent hover:bg-ink-900/50'
                     }`}
                   >
                     <div className="flex items-start gap-3">
                       {comment.avatar_url ? (
-                        <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-lg object-cover" />
+                        <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
                       ) : (
-                        <div className="w-10 h-10 rounded-lg bg-slate-800 flex items-center justify-center">
-                          <User className="w-5 h-5 text-slate-600" />
+                        <div className="w-10 h-10 rounded-full bg-ink-900 flex items-center justify-center shrink-0">
+                          <User className="w-5 h-5 text-ink-500" />
                         </div>
                       )}
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className={`font-medium ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-purple-300 to-purple-500' : 'text-slate-300'}`}>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className={`font-semibold text-sm ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500' : 'text-ink-200'}`}>
                               {comment.username}
-                              {comment.is_admin && <span style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
+                              {comment.is_admin && <span className="inline-block ml-0.5" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
                             </span>
-                            <span className="text-xs text-slate-600">
-                              {new Date(comment.created_at * 1000).toLocaleDateString()}
+                            {comment.pinned && <span className="badge bg-amber-500/15 text-amber-400">Đã ghim</span>}
+                            <span className="text-xs text-ink-500" title={formatDate(comment.created_at)}>
+                              {timeAgo(comment.created_at, 30)}
                             </span>
                           </div>
                           {user?.is_admin && (
-                            <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition">
+                            <div className="flex items-center gap-1.5 sm:opacity-0 sm:group-hover:opacity-100 focus-within:opacity-100 transition">
                               <button
+                                type="button"
                                 onClick={() => deleteComment(comment.id)}
-                                className="p-1 text-red-500/70 hover:text-red-400 hover:bg-red-500/10 rounded transition text-xs"
-                                title="Delete comment"
+                                className="btn-icon !w-8 !h-8 hover:!text-red-400 hover:!bg-red-500/10"
+                                title="Xóa bình luận"
+                                aria-label="Xóa bình luận"
                               >
                                 <X className="w-4 h-4" />
                               </button>
                               <button
+                                type="button"
                                 onClick={() => banUserFromComments(comment.user_id, comment.username)}
                                 disabled={banningUserId === comment.user_id}
-                                className="px-2 py-1 text-xs rounded bg-red-500/10 text-red-400 hover:bg-red-500/20 transition disabled:opacity-50 disabled:cursor-not-allowed"
-                                title="Ban user from commenting"
+                                className="btn btn-sm text-red-400 bg-red-500/10 hover:bg-red-500/20"
+                                title="Cấm người dùng bình luận"
                               >
-                                {banningUserId === comment.user_id ? 'Banning...' : 'Ban'}
+                                {banningUserId === comment.user_id ? 'Đang cấm…' : 'Cấm'}
                               </button>
                             </div>
                           )}
                         </div>
-                        <p className="text-slate-400 text-sm mt-1 break-words">{comment.content}</p>
+                        <p className="text-ink-300 text-[15px] leading-relaxed mt-1 break-words whitespace-pre-wrap">{comment.content}</p>
                         <div className="mt-2">
-                          <CommentInteractions 
-                            commentId={comment.id} 
+                          <CommentInteractions
+                            commentId={comment.id}
                             isStoryComment={true}
                             storyAuthorId={story?.author_id}
                             isPinned={comment.pinned || false}
@@ -1877,12 +1844,12 @@ export default function StoryPage() {
                         </div>
                       </div>
                     </div>
-                  </div>
+                  </li>
                 ))}
-              </div>
+              </ul>
             )}
           </div>
-        </div>
+        </section>
       </div>
     </div>
   );

@@ -1,26 +1,40 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="vi">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
     <link rel="icon" type="image/png" href="/favicon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#0a0a12" />
-    <title>Rebuild World - Platform Đọc Truyện Web Online</title>
+    <meta name="theme-color" content="#0b0e16" media="(prefers-color-scheme: dark)" />
+    <meta name="theme-color" content="#f5f7fb" media="(prefers-color-scheme: light)" />
+    <meta name="color-scheme" content="light dark" />
+    <title>Rebuild World - Nền tảng đọc truyện trực tuyến</title>
     <meta name="description" content="Rebuild World - Nền tảng đọc và chia sẻ truyện web, light novel, web novel trực tuyến. Tìm kiếm hàng nghìn câu chuyện hay, tạo danh sách yêu thích của bạn." />
     <meta name="keywords" content="truyện, web novel, light novel, truyện online, truyện web, đọc truyện, fiction" />
     <meta name="author" content="Rebuild World" />
     <meta name="robots" content="index, follow" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Rebuild World - Platform Đọc Truyện Web Online" />
+    <meta property="og:title" content="Rebuild World - Nền tảng đọc truyện trực tuyến" />
     <meta property="og:description" content="Nền tảng đọc và chia sẻ truyện web yêu thích của bạn" />
     <meta property="og:image" content="https://rebuild-world.up.railway.app/favicon.png" />
     <meta property="og:url" content="https://rebuild-world.up.railway.app" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Rebuild World - Platform Đọc Truyện Web Online" />
+    <meta name="twitter:title" content="Rebuild World - Nền tảng đọc truyện trực tuyến" />
     <meta name="twitter:description" content="Nền tảng đọc và chia sẻ truyện web yêu thích của bạn" />
-    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=Inter:wght@300;400;500;600;700&family=Literata:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=Literata:ital,opsz,wght@0,7..72,400;0,7..72,600;1,7..72,400&family=Noto+Serif:ital,wght@0,400;0,600;1,400&display=swap&subset=vietnamese" rel="stylesheet">
+    <script>
+      // Apply the saved theme before first paint so the page never flashes the wrong colours.
+      (function () {
+        var theme = 'system';
+        try { theme = localStorage.getItem('rw_theme') || 'system'; } catch (e) {}
+        var dark = theme === 'dark' || (theme !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.classList.toggle('dark', dark);
+        document.documentElement.style.colorScheme = dark ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

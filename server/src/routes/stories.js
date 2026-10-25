@@ -112,8 +112,13 @@ router.get('/:id', optionalAuth, async (req, res) => {
       if (bmResult.rows.length > 0) bookmarked = true;
     }
 
+    // has_images is derived read-only from existing data: comic pages in `images`,
+    // or illustrations embedded in text content as ![alt](/api/images/<id>)
     const chaptersResult = await pool.query(`
-      SELECT id, chapter_number, title, views, created_at, volume_id FROM chapters
+      SELECT id, chapter_number, title, views, created_at, volume_id,
+        (COALESCE(images, '') NOT IN ('', '[]')
+          OR COALESCE(content, '') LIKE '%](/api/images/%') AS has_images
+      FROM chapters
       WHERE story_id = $1 ORDER BY chapter_number ASC
     `, [story.id]);
     const chapters = chaptersResult.rows;

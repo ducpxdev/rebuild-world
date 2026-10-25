@@ -14,9 +14,16 @@ export interface StoredProgress {
   updatedAt: number;
   chapterId?: string;
   scrollPct?: number; // 0..1 within the chapter
+  // Display-only extras so the home page can list "continue reading" without extra requests
+  storyTitle?: string;
+  coverUrl?: string;
+  totalChapters?: number;
 }
 
-const progressKey = (storyId: string) => `rw_progress_${storyId}`;
+export interface RecentProgress extends StoredProgress { storyId: string; }
+
+const PROGRESS_PREFIX = 'rw_progress_';
+const progressKey = (storyId: string) => `${PROGRESS_PREFIX}${storyId}`;
 const readKey = (storyId: string) => `rw_read_${storyId}`;
 
 export function getProgress(storyId: string): StoredProgress | null {
@@ -59,4 +66,21 @@ export function markChapterRead(storyId: string, chapterId: string): Set<string>
     }
   }
   return read;
+}
+
+/** Every story with saved progress, most recently read first. */
+export function getRecentProgress(limit = 6): RecentProgress[] {
+  const items: RecentProgress[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (!key?.startsWith(PROGRESS_PREFIX)) continue;
+      const storyId = key.slice(PROGRESS_PREFIX.length);
+      const progress = getProgress(storyId);
+      if (progress) items.push({ ...progress, storyId });
+    }
+  } catch {
+    return [];
+  }
+  return items.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)).slice(0, limit);
 }
