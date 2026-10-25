@@ -103,3 +103,85 @@ h1, h2, h3, h4, h5, h6 {
   );
   pointer-events: none;
 }
+
+/* ── Chapter reader ───────────────────────────────────────────── */
+
+/* Paragraph rhythm scales with the reader's chosen font size */
+.reader-prose > * {
+  margin: 0;
+}
+.reader-prose > * + * {
+  margin-top: 1em;
+}
+.reader-prose p {
+  overflow-wrap: break-word;
+}
+.reader-prose[data-align='justify'] p {
+  text-align: justify;
+  text-justify: inter-word;
+}
+
+/* Scene-break lines such as "***" or "---" */
+.reader-prose .reader-scene-break {
+  margin-top: 1.75em;
+  margin-bottom: 1.75em;
+  text-align: center !important;
+  letter-spacing: 0.5em;
+  opacity: 0.55;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-prose .reader-scene-break + * {
+  margin-top: 0;
+}
+
+/* Embedded chapter images */
+.reader-prose .reader-figure {
+  margin-top: 1.5em;
+  margin-bottom: 1.5em;
+}
+.reader-prose .reader-figure + * {
+  margin-top: 0;
+}
+
+@keyframes reader-pop {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.animate-reader-pop {
+  animation: reader-pop 0.18s ease-out;
+}
+
+@keyframes reader-slide-in {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+.animate-reader-slide-in {
+  animation: reader-slide-in 0.22s ease-out;
+}
+
+@keyframes reader-toast-in {
+  from { opacity: 0; transform: translate(-50%, 16px); }
+  to { opacity: 1; transform: translate(-50%, 0); }
+}
+.animate-reader-toast {
+  animation: reader-toast-in 0.25s ease-out;
+}
+
+/* Briefly highlights a comment reached via a #comment-<id> link */
+@keyframes comment-highlight {
+  0%, 60% { background-color: rgba(0, 212, 255, 0.12); box-shadow: inset 3px 0 0 rgba(0, 212, 255, 0.8); }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+.comment-highlight {
+  animation: comment-highlight 2.5s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-reader-pop,
+  .animate-reader-slide-in,
+  .animate-reader-toast {
+    animation: none;
+  }
+}
