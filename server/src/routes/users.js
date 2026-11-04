@@ -115,10 +115,12 @@ router.put('/me', authenticateToken, uploadDb.single('avatar'), saveUploadedFile
     const current = currentResult.rows[0];
     if (!current) return res.status(404).json({ error: 'User not found' });
 
+    const nextBio = typeof bio === 'string' ? bio.trim().slice(0, 300) : current.bio;
+    const nextAvatar = avatar_url ?? current.avatar_url;
     await pool.query('UPDATE users SET bio = $1, avatar_url = $2 WHERE id = $3',
-      [bio ?? current.bio, avatar_url ?? current.avatar_url, req.user.id]);
+      [nextBio, nextAvatar, req.user.id]);
 
-    res.json({ message: 'Profile updated' });
+    res.json({ message: 'Profile updated', bio: nextBio, avatar_url: nextAvatar });
   } catch (error) {
     console.error('Error updating profile:', error);
     res.status(500).json({ error: 'Failed to update profile' });

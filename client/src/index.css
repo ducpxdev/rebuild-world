@@ -570,6 +570,30 @@ body.reader-focus [data-reader-chrome] {
   50% { transform: scale(1.3) rotate(180deg); opacity: 0.7; }
 }
 
+/* Profile page cover: soft colour blobs with a faint dot texture, tuned per theme */
+.profile-banner {
+  --pb-a: color-mix(in oklab, var(--primary-500) 55%, transparent);
+  --pb-b: color-mix(in oklab, #6366f1 45%, transparent);
+  --pb-c: color-mix(in oklab, #22d3ee 40%, transparent);
+  --pb-dot: rgba(255, 255, 255, 0.35);
+  background-color: color-mix(in oklab, var(--primary-500) 14%, var(--rw-surface));
+  background-image:
+    radial-gradient(var(--pb-dot) 1px, transparent 1.5px),
+    radial-gradient(60% 120% at 12% 20%, var(--pb-a), transparent 70%),
+    radial-gradient(50% 110% at 88% 10%, var(--pb-b), transparent 70%),
+    radial-gradient(45% 90% at 60% 110%, var(--pb-c), transparent 70%);
+  background-size: 18px 18px, 100% 100%, 100% 100%, 100% 100%;
+}
+.profile-banner--admin {
+  --pb-a: color-mix(in oklab, #a855f7 50%, transparent);
+  --pb-b: color-mix(in oklab, #d946ef 40%, transparent);
+  --pb-c: color-mix(in oklab, #6366f1 40%, transparent);
+  background-color: color-mix(in oklab, #a855f7 14%, var(--rw-surface));
+}
+:root.dark .profile-banner {
+  --pb-dot: rgba(255, 255, 255, 0.07);
+}
+
 /* Pinned comments get a soft amber outline */
 .pinned-comment {
   position: relative;
