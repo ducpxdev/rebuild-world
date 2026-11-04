@@ -1,12 +1,15 @@
 import { useLocation, useNavigate } from 'react-router-dom';
-import { User, MessageCircle } from 'lucide-react';
+import { MessageCircle } from 'lucide-react';
 import { timeAgo } from '../lib/format';
+import { UserName, UserAvatar } from './UserName';
 
 interface LatestComment {
   id: string;
   content: string;
   username: string;
   avatar_url?: string;
+  role?: string | null;
+  is_admin?: number | boolean;
   created_at: number;
   type: 'story' | 'chapter';
   chapter_number?: number;
@@ -63,33 +66,25 @@ export default function LatestComments({ storyId, latestComments, isLoading }: L
       ) : (
         <ul className="space-y-1">
           {latestComments.map((comment) => (
-            <li key={comment.id}>
-              <button
-                type="button"
-                onClick={() => openComment(comment)}
-                className="w-full text-left flex items-start gap-2.5 rounded-xl p-2 hover:bg-ink-900 transition"
-              >
-                <div className="w-7 h-7 rounded-full shrink-0 bg-ink-900 flex items-center justify-center overflow-hidden">
-                  {comment.avatar_url ? (
-                    <img src={comment.avatar_url} alt="" className="w-7 h-7 object-cover" />
-                  ) : (
-                    <User className="w-3.5 h-3.5 text-ink-500" />
-                  )}
+            <li key={comment.id} className="flex items-start gap-2.5 rounded-xl p-2 hover:bg-ink-900 transition">
+              <UserAvatar username={comment.username} src={comment.avatar_url} size="w-7 h-7" textSize="text-[11px]" />
+              <div className="flex-1 min-w-0">
+                <div className="text-xs leading-snug">
+                  <UserName username={comment.username} role={comment.role} isAdmin={comment.is_admin} className="font-semibold" />
+                  {' '}
+                  <button type="button" onClick={() => openComment(comment)} className="text-ink-500 hover:text-primary-300 text-left transition">
+                    đã bình luận {getLocationText(comment)}
+                  </button>
                 </div>
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs leading-snug">
-                    <span className="font-semibold text-ink-200">{comment.username}</span>
-                    {' '}
-                    <span className="text-ink-500">đã bình luận {getLocationText(comment)}</span>
-                  </div>
+                <button type="button" onClick={() => openComment(comment)} className="block w-full text-left" aria-label={`Xem bình luận của ${comment.username}`}>
                   <p className="text-[13px] text-ink-300 line-clamp-2 break-words mt-0.5">
                     {comment.content}
                   </p>
                   <p className="text-[11px] text-ink-500 mt-0.5">
                     {timeAgo(comment.created_at)}
                   </p>
-                </div>
-              </button>
+                </button>
+              </div>
             </li>
           ))}
         </ul>

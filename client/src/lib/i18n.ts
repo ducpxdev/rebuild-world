@@ -117,6 +117,9 @@ const MESSAGES: Record<string, string> = {
   'Chapters reordered successfully': 'Đã sắp xếp lại các chương',
   'Story created': 'Đã tạo truyện',
   'Story updated': 'Đã cập nhật truyện',
+  'Moderator access required': 'Chỉ điều hành viên mới có thể thực hiện thao tác này',
+  'Admin access required': 'Chỉ quản trị viên mới có thể thực hiện thao tác này',
+  'Invalid role': 'Vai trò không hợp lệ',
 };
 
 const UNITS: Record<string, string> = { second: 'giây', seconds: 'giây', minute: 'phút', minutes: 'phút' };

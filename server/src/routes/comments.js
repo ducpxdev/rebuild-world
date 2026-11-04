@@ -173,7 +173,7 @@ router.post('/:commentId/replies', authenticateToken, async (req, res) => {
 
     // Get reply with user info
     const replyResult = await pool.query(`
-      SELECT cr.*, u.username, u.avatar_url 
+      SELECT cr.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM comment_replies cr
       JOIN users u ON cr.user_id = u.id 
       WHERE cr.id = $1
@@ -193,7 +193,7 @@ router.get('/:commentId/replies', async (req, res) => {
     const { commentId } = req.params;
 
     const result = await pool.query(`
-      SELECT cr.*, u.username, u.avatar_url, u.is_admin
+      SELECT cr.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM comment_replies cr
       JOIN users u ON cr.user_id = u.id
       WHERE cr.comment_id = $1
@@ -405,7 +405,7 @@ router.post('/story/:storyCommentId/replies', authenticateToken, async (req, res
 
     // Get reply with user info
     const replyResult = await pool.query(`
-      SELECT scr.*, u.username, u.avatar_url 
+      SELECT scr.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM story_comment_replies scr
       JOIN users u ON scr.user_id = u.id 
       WHERE scr.id = $1
@@ -425,7 +425,7 @@ router.get('/story/:storyCommentId/replies', async (req, res) => {
     const { storyCommentId } = req.params;
 
     const result = await pool.query(`
-      SELECT scr.*, u.username, u.avatar_url, u.is_admin
+      SELECT scr.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM story_comment_replies scr
       JOIN users u ON scr.user_id = u.id
       WHERE scr.story_comment_id = $1

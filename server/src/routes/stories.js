@@ -36,7 +36,7 @@ router.get('/', optionalAuth, async (req, res) => {
 
   try {
     const storiesResult = await pool.query(`
-      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar,
+      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar, u.role as author_role,
         (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count
       FROM stories s
       JOIN users u ON s.author_id = u.id
@@ -62,7 +62,7 @@ router.get('/', optionalAuth, async (req, res) => {
 router.get('/:id', optionalAuth, async (req, res) => {
   try {
     const storyResult = await pool.query(`
-      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar, u.is_admin as author_is_admin,
+      SELECT s.*, u.username as author_name, u.avatar_url as author_avatar, u.role as author_role, u.is_admin as author_is_admin,
         (SELECT COUNT(*) FROM chapters c WHERE c.story_id = s.id) as chapter_count,
         (SELECT COUNT(*) FROM bookmarks b WHERE b.story_id = s.id) as bookmark_count,
         (
@@ -287,7 +287,7 @@ router.post('/:id/bookmark', authenticateToken, async (req, res) => {
 router.get('/:id/comments', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT sc.*, u.username, u.avatar_url, u.is_admin
+      SELECT sc.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.story_id = $1
@@ -345,7 +345,7 @@ router.post('/:id/comments', authenticateToken, async (req, res) => {
     }
 
     const commentResult = await pool.query(`
-      SELECT sc.*, u.username, u.avatar_url, u.is_admin
+      SELECT sc.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
       WHERE sc.id = $1
@@ -366,7 +366,7 @@ router.get('/:id/latest-comments', async (req, res) => {
     // Fetch latest story comments (comment on story itself)
     const storyCommentsResult = await pool.query(`
       SELECT sc.id, sc.story_id, sc.user_id, sc.content, sc.created_at,
-             u.username, u.avatar_url, u.is_admin,
+             u.username, u.avatar_url, u.role, u.is_admin,
              'story' as comment_type, NULL::INTEGER as chapter_number, NULL::TEXT as chapter_id, NULL::TEXT as chapter_title
       FROM story_comments sc
       JOIN users u ON sc.user_id = u.id
@@ -377,7 +377,7 @@ router.get('/:id/latest-comments', async (req, res) => {
     // Fetch latest chapter comments with chapter title
     const chapterCommentsResult = await pool.query(`
       SELECT c.id, c.chapter_id, c.user_id, c.content, c.created_at,
-             u.username, u.avatar_url, u.is_admin,
+             u.username, u.avatar_url, u.role, u.is_admin,
              'chapter' as comment_type, ch.chapter_number, ch.id as chapter_id, ch.title as chapter_title
       FROM comments c
       JOIN users u ON c.user_id = u.id
@@ -446,7 +446,7 @@ router.post('/users/:userId/ban-from-comments', authenticateToken, requireAdmin,
 router.get('/:id/reviews', async (req, res) => {
   try {
     const result = await pool.query(`
-      SELECT sr.user_id, sr.rating, sr.review_text, sr.created_at, u.username, u.avatar_url
+      SELECT sr.user_id, sr.rating, sr.review_text, sr.created_at, u.username, u.avatar_url, u.role
       FROM story_ratings sr
       JOIN users u ON sr.user_id = u.id
       WHERE sr.story_id = $1 AND sr.review_text != ''

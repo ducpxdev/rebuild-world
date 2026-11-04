@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { pool } from '../database.js';
 import { authenticateToken, optionalAuth } from '../middleware/auth.js';
 import { uploadDb, saveUploadedFiles } from '../middleware/uploadDb.js';
+import { DISPLAY_ROLES, getPermissions } from '../roles.js';
 
 const router = Router();
 
@@ -10,7 +11,7 @@ const router = Router();
 router.get('/:username/profile', optionalAuth, async (req, res) => {
   try {
     const userResult = await pool.query(
-      'SELECT id, username, avatar_url, bio, is_admin, created_at FROM users WHERE username = $1',
+      'SELECT id, username, avatar_url, bio, is_admin, is_mod, role, created_at FROM users WHERE username = $1',
       [req.params.username]
     );
     const user = userResult.rows[0];
@@ -124,6 +125,48 @@ router.put('/me', authenticateToken, uploadDb.single('avatar'), saveUploadedFile
   } catch (error) {
     console.error('Error updating profile:', error);
     res.status(500).json({ error: 'Failed to update profile' });
+  }
+});
+
+// PUT /api/users/:username/role — assign or clear a display role (mods and admins only)
+router.put('/:username/role', authenticateToken, async (req, res) => {
+  try {
+    const { isMod } = await getPermissions(req.user.id);
+    if (!isMod) return res.status(403).json({ error: 'Moderator access required' });
+
+    const role = req.body?.role ?? null;
+    if (role !== null && !DISPLAY_ROLES.includes(role)) {
+      return res.status(400).json({ error: 'Invalid role' });
+    }
+
+    const result = await pool.query(
+      'UPDATE users SET role = $1 WHERE username = $2 RETURNING username, role',
+      [role, req.params.username]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json(result.rows[0]);
+  } catch (error) {
+    console.error('Error updating user role:', error);
+    res.status(500).json({ error: 'Failed to update role' });
+  }
+});
+
+// PUT /api/users/:username/mod — grant or revoke moderator permission (admins only)
+router.put('/:username/mod', authenticateToken, async (req, res) => {
+  try {
+    const { isAdmin } = await getPermissions(req.user.id);
+    if (!isAdmin) return res.status(403).json({ error: 'Admin access required' });
+
+    const isMod = req.body?.is_mod ? 1 : 0;
+    const result = await pool.query(
+      'UPDATE users SET is_mod = $1 WHERE username = $2 RETURNING username, is_mod',
+      [isMod, req.params.username]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: 'User not found' });
+    res.json({ username: result.rows[0].username, is_mod: !!result.rows[0].is_mod });
+  } catch (error) {
+    console.error('Error updating moderator status:', error);
+    res.status(500).json({ error: 'Failed to update moderator status' });
   }
 });
 
@@ -303,10 +346,10 @@ router.get('/me/analytics/:storyId', authenticateToken, async (req, res) => {
           FROM story_comments sc
           WHERE sc.story_id = $1
         )
-        SELECT u.username, u.avatar_url, COUNT(*) AS comment_count
+        SELECT u.username, u.avatar_url, u.role, COUNT(*) AS comment_count
         FROM all_comments ac
         JOIN users u ON u.id = ac.user_id
-        GROUP BY u.id, u.username, u.avatar_url
+        GROUP BY u.id, u.username, u.avatar_url, u.role
         ORDER BY comment_count DESC
         LIMIT 10
       `, [storyId]),

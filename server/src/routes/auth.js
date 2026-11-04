@@ -87,7 +87,7 @@ router.post('/login', loginLimiter, async (req, res) => {
     });
 
     res.json({
-      user: { id: user.id, username: user.username, email: user.email, avatar_url: user.avatar_url, bio: user.bio, is_admin: !!user.is_admin },
+      user: { id: user.id, username: user.username, email: user.email, avatar_url: user.avatar_url, bio: user.bio, is_admin: !!user.is_admin, is_mod: !!user.is_mod, role: user.role ?? null },
     });
   } catch (error) {
     console.error('Login error:', error);
@@ -222,7 +222,7 @@ router.post('/reset-password', async (req, res) => {
 router.get('/me', authenticateToken, async (req, res) => {
   try {
     const result = await pool.query(
-      'SELECT id, username, email, avatar_url, bio, is_admin, created_at FROM users WHERE id = $1',
+      'SELECT id, username, email, avatar_url, bio, is_admin, is_mod, role, created_at FROM users WHERE id = $1',
       [req.user.id]
     );
     const user = result.rows[0];

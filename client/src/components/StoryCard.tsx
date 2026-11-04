@@ -3,6 +3,7 @@ import { Eye, Star, BookOpen, Image, Bookmark } from 'lucide-react';
 import { getCategoryBadge, genreLabel, statusLabel, typeLabel } from '../lib/i18n';
 import { getProgress } from '../lib/readingProgress';
 import { formatCompact } from '../lib/format';
+import { userNameClass } from '../lib/roles';
 
 interface StoryCardProps {
   id: string;
@@ -11,6 +12,7 @@ interface StoryCardProps {
   type: 'text' | 'comic';
   genre?: string;
   author_name: string;
+  author_role?: string | null;
   views: number;
   rating_avg?: number;
   rating_count?: number;
@@ -22,7 +24,7 @@ interface StoryCardProps {
   latestChapterTitle?: string;
 }
 
-export default function StoryCard({ id, title, cover_url, type, genre, author_name, views, rating_avg, chapter_count, status, tags, isLatestMode, latestChapterNumber, latestChapterTitle }: StoryCardProps) {
+export default function StoryCard({ id, title, cover_url, type, genre, author_name, author_role, views, rating_avg, chapter_count, status, tags, isLatestMode, latestChapterNumber, latestChapterTitle }: StoryCardProps) {
   const linkTo = isLatestMode && latestChapterNumber !== undefined
     ? `/story/${id}/chapter/${latestChapterNumber}`
     : `/story/${id}`;
@@ -70,7 +72,7 @@ export default function StoryCard({ id, title, cover_url, type, genre, author_na
         {isLatestMode && latestChapterTitle && (
           <p className="text-xs text-primary-400 mt-1 line-clamp-1 font-medium">Mới: {latestChapterTitle}</p>
         )}
-        <p className="text-xs text-ink-500 mt-1 truncate">{author_name}</p>
+        <p className="text-xs text-ink-500 mt-1 truncate"><span className={userNameClass(author_role, false, '')}>{author_name}</span></p>
         <div className="mt-auto pt-2 flex items-center gap-1.5 flex-wrap">
           {progress && !isLatestMode ? (
             <span className="badge bg-primary-500/12 text-primary-300" title={progress.title ? `Đang đọc: ${progress.title}` : undefined}>

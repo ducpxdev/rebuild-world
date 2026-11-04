@@ -6,6 +6,7 @@ import api from '../lib/api';
 import { useScrollDirection } from '../lib/useScrollDirection';
 import BrandMark from './BrandMark';
 import { ThemeToggle } from './ui';
+import { userNameClass } from '../lib/roles';
 
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   `flex items-center gap-1.5 px-3 h-10 rounded-xl text-sm font-medium transition ${
@@ -125,7 +126,7 @@ export default function Navbar() {
                     ) : (
                       <span className="w-7 h-7 rounded-full bg-primary-500/15 text-primary-300 flex items-center justify-center"><User className="w-4 h-4" /></span>
                     )}
-                    <span className="text-sm font-medium text-ink-300 max-w-[8rem] truncate">{user.username}</span>
+                    <span className="text-sm font-medium text-ink-300 max-w-[8rem] truncate"><span className={userNameClass(user.role, false, '')}>{user.username}</span></span>
                   </Link>
                 )}
                 <button type="button" onClick={logout} className="btn-icon hover:!text-red-400 hover:!bg-red-500/10" title="Đăng xuất" aria-label="Đăng xuất">

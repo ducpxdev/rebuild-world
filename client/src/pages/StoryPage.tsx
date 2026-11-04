@@ -7,6 +7,7 @@ import { Star, Eye, BookOpen, Image, Clock, ArrowRight, User, Heart, MessageCirc
 import CommentInteractions from '../components/CommentInteractions';
 import LatestComments from '../components/LatestComments';
 import { ChapterImageIcon, PageLoader, Alert } from '../components/ui';
+import { UserName, UserAvatar } from '../components/UserName';
 import { getCategoryBadge, genreLabel, statusLabel, typeLabel, apiErrorMessage } from '../lib/i18n';
 import { formatDate, formatNumber, formatCompact, timeAgo, isRecent } from '../lib/format';
 import { getProgress, getReadChapters, type StoredProgress } from '../lib/readingProgress';
@@ -18,7 +19,7 @@ interface StoryDetail {
   type: 'text' | 'comic'; genre?: string; tags?: string; status?: string;
   views: number; rating_avg: number; rating_count: number; user_rating: number;
   bookmark_count: number; comment_count: number; bookmarked: boolean;
-  author_name: string; author_avatar?: string; author_id: string; author_is_admin?: number;
+  author_name: string; author_avatar?: string; author_id: string; author_is_admin?: number; author_role?: string | null;
   work_author_name?: string; illustrator_name?: string; translator_name?: string;
   chapter_count: number; chapters: Chapter[]; created_at: number; updated_at: number;
   total_word_count?: number; additional_notes?: string;
@@ -813,10 +814,7 @@ export default function StoryPage() {
                   )}
                   <div>
                     <span className="flex items-center gap-1 text-[11px] text-ink-500 font-semibold uppercase tracking-wider"><Shield className="w-3 h-3" />Dịch giả</span>
-                    <span className={`text-sm font-semibold transition ${story.author_is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500' : 'text-ink-200 group-hover:text-primary-300'}`}>
-                      {story.author_name}
-                      {story.author_is_admin && <span className="inline-block ml-0.5" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
-                    </span>
+                    <UserName username={story.author_name} role={story.author_role} isAdmin={story.author_is_admin} link={false} fallbackClass="text-ink-200 group-hover:text-primary-300 transition" className="block text-sm font-semibold" />
                   </div>
                 </Link>
                 {story.work_author_name && (
@@ -1087,16 +1085,10 @@ export default function StoryPage() {
                 <ul className="space-y-4">
                   {reviews.map((review, idx) => (
                     <li key={idx} className="flex gap-3 pb-4 border-b border-line last:border-b-0 last:pb-0">
-                      {review.avatar_url ? (
-                        <img src={review.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="w-9 h-9 rounded-full bg-ink-900 flex items-center justify-center shrink-0">
-                          <User className="w-4 h-4 text-primary-400" />
-                        </div>
-                      )}
+                      <UserAvatar username={review.username} src={review.avatar_url} size="w-9 h-9" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-ink-200">{review.username}</span>
+                          <UserName username={review.username} role={review.role} className="text-sm font-semibold" />
                           <span className="flex items-center gap-0.5" aria-label={`${review.rating} trên 5 sao`}>
                             {[1, 2, 3, 4, 5].map(star => (
                               <Star key={star} className={`w-3.5 h-3.5 ${star <= review.rating ? 'text-amber-500 fill-amber-500' : 'text-ink-700'}`} />
@@ -1791,20 +1783,11 @@ export default function StoryPage() {
                     }`}
                   >
                     <div className="flex items-start gap-3">
-                      {comment.avatar_url ? (
-                        <img src={comment.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover shrink-0" />
-                      ) : (
-                        <div className="w-10 h-10 rounded-full bg-ink-900 flex items-center justify-center shrink-0">
-                          <User className="w-5 h-5 text-ink-500" />
-                        </div>
-                      )}
+                      <UserAvatar username={comment.username} src={comment.avatar_url} size="w-10 h-10" />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 justify-between">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={`font-semibold text-sm ${comment.is_admin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500' : 'text-ink-200'}`}>
-                              {comment.username}
-                              {comment.is_admin && <span className="inline-block ml-0.5" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }}>✨</span>}
-                            </span>
+                            <UserName username={comment.username} role={comment.role} isAdmin={comment.is_admin} className="font-semibold text-sm" />
                             {comment.pinned && <span className="badge bg-amber-500/15 text-amber-400">Đã ghim</span>}
                             <span className="text-xs text-ink-500" title={formatDate(comment.created_at)}>
                               {timeAgo(comment.created_at, 30)}

@@ -2,6 +2,7 @@ import { useEffect, useState, useId } from 'react';
 import { Eye, Star, BookOpen, Users, MessageCircle, TrendingUp } from 'lucide-react';
 import api from '../lib/api';
 import { formatCompact } from '../lib/format';
+import { UserName, UserAvatar } from './UserName';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -9,7 +10,7 @@ interface ViewPoint { view_date: string; views: number; }
 interface ChapterStat { chapter_number: number; title: string; views: number; }
 interface RatingPoint { week_start: string; avg_rating: number; count: number; }
 interface FollowerPoint { week_start: string; count: number; }
-interface Commenter { username: string; avatar_url?: string; comment_count: number; }
+interface Commenter { username: string; avatar_url?: string; role?: string | null; comment_count: number; }
 
 interface AnalyticsData {
   story: { id: string; title: string; views: number; rating_avg: number; chapter_count: number; };
@@ -361,14 +362,8 @@ export default function StoryAnalytics({ storyId, storyTitle }: Props) {
               {topCommenters.map((c, i) => (
                 <div key={c.username} className="flex items-center gap-2.5">
                   <span className="text-xs text-ink-500 w-5 tabular-nums shrink-0">#{i + 1}</span>
-                  {c.avatar_url ? (
-                    <img src={c.avatar_url} alt={c.username} className="w-6 h-6 rounded-full object-cover shrink-0" />
-                  ) : (
-                    <div className="w-6 h-6 rounded-full bg-ink-800 flex items-center justify-center text-[10px] text-ink-400 font-bold shrink-0">
-                      {c.username[0]?.toUpperCase()}
-                    </div>
-                  )}
-                  <span className="flex-1 text-xs text-ink-300 truncate">{c.username}</span>
+                  <UserAvatar username={c.username} src={c.avatar_url} size="w-6 h-6" textSize="text-[10px]" />
+                  <UserName username={c.username} role={c.role} fallbackClass="text-ink-300" className="flex-1 min-w-0 text-xs truncate" />
                   <span className="text-xs text-emerald-400 tabular-nums shrink-0">
                     {c.comment_count} <span className="text-ink-500">bình luận</span>
                   </span>

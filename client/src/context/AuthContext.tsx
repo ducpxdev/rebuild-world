@@ -9,6 +9,8 @@ interface User {
   avatar_url?: string;
   bio?: string;
   is_admin?: boolean;
+  is_mod?: boolean;
+  role?: string | null;
 }
 
 interface AuthContextType {

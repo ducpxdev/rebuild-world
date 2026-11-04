@@ -475,6 +475,21 @@ export async function initDb() {
       }
     }
 
+    // Migration: moderator permission + cosmetic display role (username colour)
+    for (const [column, ddl] of [
+      ['is_mod', 'ALTER TABLE users ADD COLUMN is_mod INTEGER DEFAULT 0'],
+      ['role', 'ALTER TABLE users ADD COLUMN role TEXT DEFAULT NULL'],
+    ]) {
+      try {
+        await pool.query(ddl);
+        console.log(`✓ Added ${column} column to users table`);
+      } catch (err) {
+        if (!err.message.includes('already exists')) {
+          console.error(`Error adding ${column} column:`, err.message);
+        }
+      }
+    }
+
     // Daily view aggregation table for analytics dashboard
     await pool.query(`
       CREATE TABLE IF NOT EXISTS view_logs (

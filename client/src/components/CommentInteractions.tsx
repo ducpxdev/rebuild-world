@@ -4,6 +4,7 @@ import api from '../lib/api';
 import { useAuth } from '../context/AuthContext';
 import { timeAgo, formatDateTime } from '../lib/format';
 import { apiErrorMessage } from '../lib/i18n';
+import { UserName, UserAvatar } from './UserName';
 
 interface Reply {
   id: string;
@@ -13,6 +14,7 @@ interface Reply {
   created_at: number;
   user_id: string;
   is_admin?: boolean;
+  role?: string | null;
 }
 
 interface CommentDisplayProps {
@@ -275,34 +277,13 @@ export default function CommentInteractions({
                   className="group flex gap-2.5 rounded-xl px-3 py-2.5 bg-ink-900/60 hover:bg-ink-900 transition"
                 >
                   {/* Avatar */}
-                  <div className="shrink-0 mt-0.5">
-                    {reply.avatar_url ? (
-                      <img
-                        src={reply.avatar_url}
-                        alt={reply.username}
-                        className="w-6 h-6 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-6 h-6 rounded-full bg-primary-500/15 flex items-center justify-center text-[10px] text-primary-300 font-bold">
-                        {reply.username[0]?.toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                  <UserAvatar username={reply.username} src={reply.avatar_url} size="w-6 h-6" textSize="text-[10px]" className="mt-0.5" />
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`text-xs font-semibold ${
-                            reply.is_admin
-                              ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500'
-                              : 'text-ink-200'
-                          }`}
-                        >
-                          {reply.username}
-                          {reply.is_admin && <span className="ml-1">✨</span>}
-                        </span>
+                        <UserName username={reply.username} role={reply.role} isAdmin={reply.is_admin} className="text-xs font-semibold" />
                         <span
                           className="text-[11px] text-ink-500"
                           title={formatDateTime(reply.created_at)}

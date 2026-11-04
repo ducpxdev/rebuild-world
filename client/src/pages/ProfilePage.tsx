@@ -9,8 +9,10 @@ import { apiErrorMessage } from '../lib/i18n';
 import { formatDate, formatCompact, formatNumber } from '../lib/format';
 import {
   User, Calendar, BookOpen, Users, UserPlus, UserCheck, UserMinus, Shield, Camera, X, Pencil, Check,
-  AlertTriangle, Eye, Star, Share2, LayoutDashboard, PenSquare, Plus, Loader2,
+  AlertTriangle, Eye, Star, Share2, LayoutDashboard, PenSquare, Plus, Loader2, ShieldCheck,
 } from 'lucide-react';
+import RoleManager from '../components/RoleManager';
+import { ROLES, asRole, userNameClass } from '../lib/roles';
 
 interface Story {
   id: string; title: string; cover_url?: string; type: 'text' | 'comic';
@@ -20,7 +22,8 @@ interface Story {
 
 interface Profile {
   id: string; username: string; avatar_url?: string; bio?: string;
-  is_admin?: number; created_at: number; stories: Story[];
+  is_admin?: number; is_mod?: number | boolean; role?: string | null;
+  created_at: number; stories: Story[];
   follower_count: number; is_following: boolean;
 }
 
@@ -279,6 +282,9 @@ export default function ProfilePage() {
   const isOwner = !!user && user.id === profile.id;
   const isAdmin = !!profile.is_admin;
   const avatarSrc = avatarPreview ?? profile.avatar_url;
+  const role = asRole(profile.role);
+  const targetIsMod = !!profile.is_mod;
+  const canModerate = !!user && (!!user.is_admin || !!user.is_mod);
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8 animate-fade-in-up">
@@ -404,8 +410,8 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="flex items-center gap-2 flex-wrap">
-                <h1 id="profile-name" className={`text-2xl sm:text-3xl font-bold break-all ${isAdmin ? 'text-transparent bg-clip-text bg-gradient-to-r from-purple-400 via-fuchsia-400 to-purple-500' : 'text-ink-50'}`}>
-                  {profile.username}
+                <h1 id="profile-name" className="text-2xl sm:text-3xl font-bold break-all">
+                  <span className={userNameClass(role, isAdmin, 'text-ink-50')}>{profile.username}</span>
                 </h1>
                 {isAdmin && <span className="inline-block text-lg" style={{ animation: 'sparkle 1.5s ease-in-out infinite' }} aria-hidden="true">✨</span>}
                 {isOwner && (
@@ -416,6 +422,16 @@ export default function ProfilePage() {
                 {isAdmin && (
                   <span className="badge bg-purple-500/15 text-purple-400 border border-purple-500/30">
                     <Shield className="w-3 h-3" /> Quản trị viên
+                  </span>
+                )}
+                {targetIsMod && !isAdmin && (
+                  <span className="badge bg-primary-500/12 text-primary-300 border border-primary-500/25">
+                    <ShieldCheck className="w-3 h-3" /> Điều hành viên
+                  </span>
+                )}
+                {role && (
+                  <span className="badge bg-ink-900 text-ink-300 border border-line" title={ROLES[role].description}>
+                    <span className={`role-dot role-${role}`} aria-hidden="true" /> {ROLES[role].label}
                   </span>
                 )}
                 {isOwner && <span className="badge bg-ink-900 text-ink-500 font-medium">Bạn</span>}
@@ -474,6 +490,21 @@ export default function ProfilePage() {
               </button>
             ) : null}
           </div>
+
+          {canModerate && (
+            <RoleManager
+              username={profile.username}
+              role={role}
+              isMod={targetIsMod}
+              targetIsAdmin={isAdmin}
+              canGrantMod={!!user?.is_admin}
+              onRoleChange={next => {
+                setProfile(prev => prev ? { ...prev, role: next } : prev);
+                if (isOwner && user) updateUser({ ...user, role: next });
+              }}
+              onModChange={next => setProfile(prev => prev ? { ...prev, is_mod: next } : prev)}
+            />
+          )}
         </div>
 
         {/* Stats strip */}
@@ -537,7 +568,7 @@ export default function ProfilePage() {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {visibleStories.map(s => (
-              <StoryCard key={s.id} {...s} author_name={profile.username} />
+              <StoryCard key={s.id} {...s} author_name={profile.username} author_role={role} />
             ))}
           </div>
         )}

@@ -44,7 +44,7 @@ router.get('/:number', optionalAuth, async (req, res) => {
 
     // Fetch comments
     const commentsResult = await pool.query(`
-      SELECT c.*, u.username, u.avatar_url FROM comments c
+      SELECT c.*, u.username, u.avatar_url, u.role, u.is_admin FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.chapter_id = $1 ORDER BY c.pinned DESC, c.created_at DESC
     `, [chapter.id]);
@@ -350,7 +350,7 @@ router.get('/:number/latest-comments', async (req, res) => {
 
     // Fetch the 7 most recent comments for this chapter
     const commentsResult = await pool.query(`
-      SELECT c.*, u.username, u.avatar_url, u.is_admin
+      SELECT c.*, u.username, u.avatar_url, u.role, u.is_admin
       FROM comments c
       JOIN users u ON c.user_id = u.id
       WHERE c.chapter_id = $1
@@ -418,7 +418,7 @@ router.post('/:number/comments', authenticateToken, async (req, res) => {
     }
 
     const commentResult = await pool.query(`
-      SELECT c.*, u.username, u.avatar_url FROM comments c
+      SELECT c.*, u.username, u.avatar_url, u.role, u.is_admin FROM comments c
       JOIN users u ON c.user_id = u.id WHERE c.id = $1
     `, [id]);
     const comment = commentResult.rows[0];

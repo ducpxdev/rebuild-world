@@ -6,10 +6,11 @@ import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import api from '../lib/api';
 import {
-  ChevronLeft, ChevronRight, MessageCircle, Send, User, Pencil, Clock, FileText, X, Shield, Eye,
+  ChevronLeft, ChevronRight, MessageCircle, Send, Pencil, Clock, FileText, X, Shield, Eye,
   List, ArrowLeft, Timer, History, BookOpen, LogIn, RotateCcw, Maximize2, Minimize2, Settings2, ArrowUp,
 } from 'lucide-react';
 import { ChapterImageIcon } from '../components/ui';
+import { UserName, UserAvatar } from '../components/UserName';
 import { apiErrorMessage } from '../lib/i18n';
 import { formatDate, formatNumber, timeAgo } from '../lib/format';
 import CommentInteractions from '../components/CommentInteractions';
@@ -21,9 +22,9 @@ import { useScrollDirection } from '../lib/useScrollDirection';
 import { useReaderPrefs, READER_THEMES, READER_FONTS, READER_WIDTHS, READER_SPACINGS } from '../lib/readerPrefs';
 import { getProgress, saveProgress, getReadChapters, markChapterRead } from '../lib/readingProgress';
 
-interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; created_at: number; pinned?: boolean; }
+interface Comment { id: string; content: string; username: string; user_id: string; avatar_url?: string; role?: string | null; is_admin?: number | boolean; created_at: number; pinned?: boolean; }
 interface LatestComment {
-  id: string; content: string; username: string; avatar_url?: string; created_at: number;
+  id: string; content: string; username: string; avatar_url?: string; role?: string | null; is_admin?: number | boolean; created_at: number;
   type: 'story' | 'chapter'; chapter_number?: number; chapter_title?: string;
 }
 interface ChapterData {
@@ -714,13 +715,11 @@ export default function ChapterPage() {
                       c.pinned ? 'pinned-comment' : 'border-transparent hover:bg-ink-900/60'
                     }`}
                   >
-                    <div className="w-9 h-9 rounded-full bg-ink-900 flex items-center justify-center shrink-0 overflow-hidden">
-                      {c.avatar_url ? <img src={c.avatar_url} alt="" className="w-9 h-9 object-cover" /> : <User className="w-4 h-4 text-primary-400" />}
-                    </div>
+                    <UserAvatar username={c.username} src={c.avatar_url} size="w-9 h-9" />
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 justify-between">
                         <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-semibold text-ink-200">{c.username}</span>
+                          <UserName username={c.username} role={c.role} isAdmin={c.is_admin} className="text-sm font-semibold" />
                           {c.pinned && <span className="badge bg-amber-500/15 text-amber-400">Đã ghim</span>}
                           <span className="text-xs text-ink-500" title={formatDate(c.created_at)}>{timeAgo(c.created_at, 30)}</span>
                         </div>
