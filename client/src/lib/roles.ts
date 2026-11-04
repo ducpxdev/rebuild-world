@@ -3,7 +3,7 @@ export const ROLE_KEYS = ['alpha', 'sheryl', 'viola', 'elena', 'sara', 'shizuka'
 export type RoleKey = typeof ROLE_KEYS[number];
 
 export const ROLES: Record<RoleKey, { label: string; description: string }> = {
-  alpha:   { label: 'Alpha',   description: 'Vàng kim lấp lánh' },
+  alpha:   { label: 'Alpha',   description: 'Vàng kim pha xanh chanh' },
   sheryl:  { label: 'Sheryl',  description: 'Hồng đáng yêu' },
   viola:   { label: 'Viola',   description: 'Tím lan mộng mơ' },
   elena:   { label: 'Elena',   description: 'Bạc lấp lánh' },

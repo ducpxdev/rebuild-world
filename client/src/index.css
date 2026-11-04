@@ -645,11 +645,36 @@ body.reader-focus [data-reader-chrome] {
   100% { background-position: -20% 0, 0 0; }
 }
 
+/* Alpha's signature: distinct gold and lime bands (held, with short transitions,
+ * so they don't blend into olive) drift continuously across the name while a
+ * brighter, wider lime-white glint sweeps through. The base layer repeats every
+ * 50% of its width, so moving it by one period loops seamlessly. */
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+  .role-name.role-alpha {
+    background-image:
+      linear-gradient(105deg, transparent 0 38%, var(--rn-glint) 50%, transparent 62% 100%),
+      linear-gradient(90deg, var(--rn-1) 0% 8%, var(--rn-2) 18% 32%, var(--rn-3) 42% 58%, var(--rn-2) 68% 82%, var(--rn-1) 92% 100%);
+    background-size: 300% 100%, 200% 100%;
+    animation: role-shimmer-alpha var(--rn-speed) linear infinite;
+  }
+}
+@keyframes role-shimmer-alpha {
+  0%   { background-position: 120% 0, 0% 0; }
+  62%  { background-position: 120% 0, 62% 0; }
+  100% { background-position: -20% 0, 100% 0; }
+}
+:root.dark .role-name.role-alpha {
+  filter: drop-shadow(0 0 0.4em color-mix(in oklab, #b6f03c 40%, transparent));
+}
+:root.dark .role-name.role-alpha:hover {
+  filter: brightness(1.1) drop-shadow(0 0 0.45em color-mix(in oklab, #b6f03c 55%, transparent));
+}
+
 /* Hues are spaced around the wheel (gold 88°, orange 45°, brown 60° but darker and
  * muted, pink 355°, orchid 310°, periwinkle 285°, mint 171°, neutral silver) so roles are
  * told apart at a glance. Carol is the only two-tone role: a hard pink → gold split.
  * Light theme (default) — deep, saturated shades that keep ~4.5:1 on white. */
-.role-alpha              { --rn-solid: #9a6400; --rn-1: #9a6400; --rn-2: #b88300; --rn-3: #865600; --rn-glint: #ffe48a; --rn-speed: 5s; } /* yellow gold */
+.role-alpha              { --rn-solid: #7f7a05; --rn-1: #a87400; --rn-2: #4f9300; --rn-3: #946600; --rn-glint: #e9ff9e; --rn-speed: 6s; } /* gold + lime, flowing (see below) */
 .role-sheryl             { --rn-solid: #e0187a; --rn-1: #e0187a; --rn-2: #f23d95; --rn-3: #c80f66; --rn-glint: #ffd1e8; } /* hot pink */
 .role-viola              { --rn-solid: #9d1fd0; --rn-1: #9d1fd0; --rn-2: #bb36e0; --rn-3: #8619c0; --rn-glint: #f3d4ff; } /* orchid purple */
 .role-elena              { --rn-solid: #3f4c60; --rn-1: #3f4c60; --rn-2: #8a97ab; --rn-3: #4a586d; --rn-glint: #ffffff; --rn-speed: 4.5s; } /* banded silver */
@@ -660,7 +685,7 @@ body.reader-focus [data-reader-chrome] {
 .role-airi               { --rn-solid: #03876d; --rn-1: #03876d; --rn-2: #0aa088; --rn-3: #027560; --rn-glint: #c9fff0; } /* mint */
 
 /* Dark theme — bright, vivid shades with a faint glow in the role's own colour */
-:root.dark .role-alpha   { --rn-solid: #ffcf33; --rn-1: #ffcf33; --rn-2: #fff0a8; --rn-3: #f2b21b; --rn-glint: #ffffff; } /* yellow gold */
+:root.dark .role-alpha   { --rn-solid: #d9e63a; --rn-1: #ffd23f; --rn-2: #b6f03c; --rn-3: #ffc61a; --rn-glint: #f7ffd6; } /* gold + lime, flowing (see below) */
 :root.dark .role-sheryl  { --rn-solid: #ff5fa8; --rn-1: #ff5fa8; --rn-2: #ff9cca; --rn-3: #ff4d9a; --rn-glint: #fff0f7; } /* hot pink */
 :root.dark .role-viola   { --rn-solid: #c45cff; --rn-1: #c45cff; --rn-2: #e19bff; --rn-3: #b347ff; --rn-glint: #fbefff; } /* orchid purple */
 :root.dark .role-elena   { --rn-solid: #ffffff; --rn-1: #ffffff; --rn-2: #7f8ea6; --rn-3: #e8eef7; --rn-glint: #ffffff; } /* banded silver */
