@@ -110,8 +110,9 @@ export default function RoleManager({ username, role, isMod, targetIsAdmin, canG
                     {key ? <span className={`role-dot role-${key}`} aria-hidden="true" /> : <Ban className="w-3 h-3" />}
                     {key ? ROLES[key].label : 'Mặc định'}
                   </span>
-                  <span className={`block mt-1 text-sm font-semibold truncate ${key ? `role-name role-${key}` : 'text-ink-200'}`}>
-                    {username}
+                  {/* Inline inner span so the role gradient spans the name, not the whole card */}
+                  <span className="block mt-1 text-sm font-semibold truncate">
+                    <span className={key ? `role-name role-${key}` : 'text-ink-200'}>{username}</span>
                   </span>
                   <span className="block text-[11px] text-ink-500 truncate">{key ? ROLES[key].description : 'Kiểu tên thông thường'}</span>
                   {(selected || busy) && (

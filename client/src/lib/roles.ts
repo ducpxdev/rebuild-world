@@ -5,12 +5,12 @@ export type RoleKey = typeof ROLE_KEYS[number];
 export const ROLES: Record<RoleKey, { label: string; description: string }> = {
   alpha:   { label: 'Alpha',   description: 'Vàng kim lấp lánh' },
   sheryl:  { label: 'Sheryl',  description: 'Hồng đáng yêu' },
-  viola:   { label: 'Viola',   description: 'Tím mộng mơ' },
+  viola:   { label: 'Viola',   description: 'Tím lan mộng mơ' },
   elena:   { label: 'Elena',   description: 'Bạc lấp lánh' },
   sara:    { label: 'Sara',    description: 'Nâu mật ong' },
   shizuka: { label: 'Shizuka', description: 'Cam dịu ánh nhũ' },
   carol:   { label: 'Carol',   description: 'Hồng pha vàng kim' },
-  yumina:  { label: 'Yumina',  description: 'Tím nhạt' },
+  yumina:  { label: 'Yumina',  description: 'Tím oải hương nhạt' },
   airi:    { label: 'Airi',    description: 'Xanh bạc hà' },
 };
 

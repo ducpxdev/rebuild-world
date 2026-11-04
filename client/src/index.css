@@ -621,7 +621,7 @@ body.reader-focus [data-reader-chrome] {
   .role-name {
     background-image:
       linear-gradient(105deg, transparent 0 42%, var(--rn-glint) 50%, transparent 58% 100%),
-      linear-gradient(90deg, var(--rn-1), var(--rn-2) 50%, var(--rn-3));
+      linear-gradient(90deg, var(--rn-1) var(--rn-a, 0%), var(--rn-2) var(--rn-b, 50%), var(--rn-3));
     background-size: 300% 100%, 100% 100%;
     background-position: 120% 0, 0 0;
     background-repeat: no-repeat;
@@ -634,32 +634,41 @@ body.reader-focus [data-reader-chrome] {
 .role-name:hover {
   filter: brightness(1.08) saturate(1.1);
 }
+:root.dark .role-name {
+  filter: drop-shadow(0 0 0.35em color-mix(in oklab, var(--rn-solid) 35%, transparent));
+}
+:root.dark .role-name:hover {
+  filter: brightness(1.1) drop-shadow(0 0 0.4em color-mix(in oklab, var(--rn-solid) 50%, transparent));
+}
 @keyframes role-shimmer {
   0%, 62% { background-position: 120% 0, 0 0; }
   100% { background-position: -20% 0, 0 0; }
 }
 
-/* Light theme (default) — deeper metals for contrast on white */
-.role-alpha   { --rn-solid: #946200; --rn-1: #8a5a00; --rn-2: #b8860b; --rn-3: #9a6b00; --rn-glint: #f3d27a; --rn-speed: 5s; }
-.role-sheryl  { --rn-solid: #be185d; --rn-1: #db2777; --rn-2: #be185d; --rn-3: #e0457f; --rn-glint: #fbcfe8; }
-.role-viola   { --rn-solid: #6d28d9; --rn-1: #7c3aed; --rn-2: #9333ea; --rn-3: #6d28d9; --rn-glint: #ddd6fe; }
-.role-elena   { --rn-solid: #4b5563; --rn-1: #4b5563; --rn-2: #7b8494; --rn-3: #515b6b; --rn-glint: #e5e7eb; --rn-speed: 5s; }
-.role-sara    { --rn-solid: #8a5320; --rn-1: #7c4a1a; --rn-2: #a8692a; --rn-3: #8a5320; --rn-glint: #f1c27d; }
-.role-shizuka { --rn-solid: #c2410c; --rn-1: #c2410c; --rn-2: #e8590c; --rn-3: #c2410c; --rn-glint: #fed7aa; --rn-speed: 6s; }
-.role-carol   { --rn-solid: #be185d; --rn-1: #db2777; --rn-2: #b8860b; --rn-3: #be185d; --rn-glint: #fde68a; --rn-speed: 5s; }
-.role-yumina  { --rn-solid: #7c3aed; --rn-1: #8b5cf6; --rn-2: #7c3aed; --rn-3: #9061f9; --rn-glint: #ede9fe; }
-.role-airi    { --rn-solid: #0f766e; --rn-1: #0d9488; --rn-2: #0e7490; --rn-3: #0f766e; --rn-glint: #ccfbf1; }
+/* Hues are spaced around the wheel (gold 88°, orange 45°, brown 60° but darker and
+ * muted, pink 355°, orchid 310°, periwinkle 285°, mint 171°, neutral silver) so roles are
+ * told apart at a glance. Carol is the only two-tone role: a hard pink → gold split.
+ * Light theme (default) — deep, saturated shades that keep ~4.5:1 on white. */
+.role-alpha              { --rn-solid: #9a6400; --rn-1: #9a6400; --rn-2: #b88300; --rn-3: #865600; --rn-glint: #ffe48a; --rn-speed: 5s; } /* yellow gold */
+.role-sheryl             { --rn-solid: #e0187a; --rn-1: #e0187a; --rn-2: #f23d95; --rn-3: #c80f66; --rn-glint: #ffd1e8; } /* hot pink */
+.role-viola              { --rn-solid: #9d1fd0; --rn-1: #9d1fd0; --rn-2: #bb36e0; --rn-3: #8619c0; --rn-glint: #f3d4ff; } /* orchid purple */
+.role-elena              { --rn-solid: #3f4c60; --rn-1: #3f4c60; --rn-2: #8a97ab; --rn-3: #4a586d; --rn-glint: #ffffff; --rn-speed: 4.5s; } /* banded silver */
+.role-sara               { --rn-solid: #7a3d10; --rn-1: #7a3d10; --rn-2: #9c5a22; --rn-3: #69330c; --rn-glint: #f5c98a; } /* honey brown */
+.role-shizuka            { --rn-solid: #d6470a; --rn-1: #d6470a; --rn-2: #e85d0c; --rn-3: #c03e08; --rn-glint: #ffd8b0; --rn-speed: 5.5s; } /* vivid orange */
+.role-carol              { --rn-solid: #d6336c; --rn-1: #d6336c; --rn-2: #b07800; --rn-3: #9a6400; --rn-glint: #ffe9a0; --rn-speed: 5s; --rn-a: 38%; --rn-b: 62%; } /* pink | gold split */
+.role-yumina             { --rn-solid: #6458dc; --rn-1: #6458dc; --rn-2: #857cec; --rn-3: #574acf; --rn-glint: #e6e3ff; } /* periwinkle lavender */
+.role-airi               { --rn-solid: #03876d; --rn-1: #03876d; --rn-2: #0aa088; --rn-3: #027560; --rn-glint: #c9fff0; } /* mint */
 
-/* Dark theme — brighter metals */
-:root.dark .role-alpha   { --rn-solid: #e6b84a; --rn-1: #d4a537; --rn-2: #f7dc7c; --rn-3: #c99a2e; --rn-glint: #fffbe6; }
-:root.dark .role-sheryl  { --rn-solid: #f9a8d4; --rn-1: #f472b6; --rn-2: #f9a8d4; --rn-3: #f472b6; --rn-glint: #fff0f7; }
-:root.dark .role-viola   { --rn-solid: #c4b5fd; --rn-1: #a78bfa; --rn-2: #d8b4fe; --rn-3: #a78bfa; --rn-glint: #f5f3ff; }
-:root.dark .role-elena   { --rn-solid: #d1d5db; --rn-1: #b8bfca; --rn-2: #f1f5f9; --rn-3: #a3abb8; --rn-glint: #ffffff; }
-:root.dark .role-sara    { --rn-solid: #e0a96d; --rn-1: #c68642; --rn-2: #f1c27d; --rn-3: #c68642; --rn-glint: #fff3dc; }
-:root.dark .role-shizuka { --rn-solid: #fdba74; --rn-1: #fb923c; --rn-2: #fed7aa; --rn-3: #fb923c; --rn-glint: #fff7ed; }
-:root.dark .role-carol   { --rn-solid: #f9a8d4; --rn-1: #f472b6; --rn-2: #f7dc7c; --rn-3: #f9a8d4; --rn-glint: #fffbe6; }
-:root.dark .role-yumina  { --rn-solid: #ddd6fe; --rn-1: #c4b5fd; --rn-2: #e9e3ff; --rn-3: #c4b5fd; --rn-glint: #ffffff; }
-:root.dark .role-airi    { --rn-solid: #5eead4; --rn-1: #5eead4; --rn-2: #a5f3fc; --rn-3: #6ee7c7; --rn-glint: #f0fdfa; }
+/* Dark theme — bright, vivid shades with a faint glow in the role's own colour */
+:root.dark .role-alpha   { --rn-solid: #ffcf33; --rn-1: #ffcf33; --rn-2: #fff0a8; --rn-3: #f2b21b; --rn-glint: #ffffff; } /* yellow gold */
+:root.dark .role-sheryl  { --rn-solid: #ff5fa8; --rn-1: #ff5fa8; --rn-2: #ff9cca; --rn-3: #ff4d9a; --rn-glint: #fff0f7; } /* hot pink */
+:root.dark .role-viola   { --rn-solid: #c45cff; --rn-1: #c45cff; --rn-2: #e19bff; --rn-3: #b347ff; --rn-glint: #fbefff; } /* orchid purple */
+:root.dark .role-elena   { --rn-solid: #ffffff; --rn-1: #ffffff; --rn-2: #7f8ea6; --rn-3: #e8eef7; --rn-glint: #ffffff; } /* banded silver */
+:root.dark .role-sara    { --rn-solid: #bf8250; --rn-1: #bf8250; --rn-2: #d9a874; --rn-3: #a86e3c; --rn-glint: #fff1dc; } /* honey brown */
+:root.dark .role-shizuka { --rn-solid: #ff6a1f; --rn-1: #ff6a1f; --rn-2: #ff9a4d; --rn-3: #ff5a0a; --rn-glint: #fff3e6; } /* vivid orange */
+:root.dark .role-carol   { --rn-solid: #ff9cc6; --rn-1: #ff9cc6; --rn-2: #ffcb45; --rn-3: #ffd866; --rn-glint: #fffbe6; } /* pink | gold split */
+:root.dark .role-yumina  { --rn-solid: #a9a4ff; --rn-1: #a9a4ff; --rn-2: #cfd0ff; --rn-3: #9c95ff; --rn-glint: #ffffff; } /* periwinkle lavender */
+:root.dark .role-airi    { --rn-solid: #3ff0c0; --rn-1: #3ff0c0; --rn-2: #9cffe0; --rn-3: #2bd9b0; --rn-glint: #f0fffa; } /* mint */
 
 /* Small colour dot used in role pickers and badges */
 .role-dot {
@@ -667,7 +676,7 @@ body.reader-focus [data-reader-chrome] {
   width: 0.625rem;
   height: 0.625rem;
   border-radius: 999px;
-  background: linear-gradient(135deg, var(--rn-1), var(--rn-2), var(--rn-3));
+  background: linear-gradient(135deg, var(--rn-1) var(--rn-a, 0%), var(--rn-2) var(--rn-b, 50%), var(--rn-3));
   box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
 }
 
